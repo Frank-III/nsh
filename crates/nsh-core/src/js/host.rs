@@ -703,7 +703,7 @@ pub const EVENTS: &[(EventKind, u32, &str, &str)] = &[
         EventKind::Error,
         on::IMAGE | on::WEBVIEW | on::VIDEO,
         "(e: { message: string; code?: string }) => void",
-        "The source failed to load. `code` is `\"ERR_ACCESS_DENIED\"` when the app's capabilities do not grant it (an image's or video's URL: `network`; a web view's page or `html`: `webview`).",
+        "The source failed to load, or (Android) the page's renderer process died; the view is then empty and the app remounts it to recover. `code` is `\"ERR_ACCESS_DENIED\"` when the app's capabilities do not grant it (an image's or video's URL: `network`; a web view's page or `html`: `webview`).",
     ),
     (
         EventKind::LoadEnd,
