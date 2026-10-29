@@ -793,6 +793,7 @@ final class Mounter {
     /** Removes a view from its parent, fading it out under a layout animation. */
     private void remove(int id) {
         View v = views.get(id);
+        if (v != null) hideKeyboardIn(v);
         Transition t = layoutAnimation != null ? layoutAnimation[2] : null;
         if (v == null || t == null || v.getParent() == null) {
             detach(v);
@@ -886,6 +887,7 @@ final class Mounter {
         if (v instanceof Box) ((Box) v).dropShader();
         Animator running = layoutAnimators.get(id);
         if (running != null) running.cancel();
+        if (v != null) hideKeyboardIn(v);
         detach(v);
         if (v instanceof ImageBox) cancelImage((ImageBox) v);
         if (v instanceof WebBox) ((WebBox) v).destroy();
@@ -1980,9 +1982,9 @@ final class Mounter {
     }
 
     /**
-     * A page or dialog leaves with the field that has the keyboard: the
-     * keyboard hides with it, as with a native back, not once the field is
-     * gone (which leaves it up). Focus goes to the host, as `blur()` does.
+     * A page, dialog or any view leaves with the field that has the keyboard:
+     * the keyboard hides with it, as with a native back, not once the field
+     * is gone (which leaves it up). Focus goes to the host, as `blur()` does.
      */
     void hideKeyboardIn(View leaving) {
         View f = leaving.findFocus();
