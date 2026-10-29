@@ -5,7 +5,8 @@
 //! - `nsh-linux-host --bundle <path> [--trace]` runs a built bundle (`.nshc`
 //!   is QuickJS bytecode, anything else JS source).
 //!
-//! - `--window-size 390x844` sets the window size.
+//! - `--window-size 1200x800` sets the window size (1200×800 by default; 390x844
+//!   shows an app's phone layout).
 //! - `--fps` logs the performance monitor's readings once a second (frame
 //!   rate, frame and commit costs, CPU, memory).
 //! - `--data-dir <dir>` keeps the apps' data there instead of the system's
@@ -77,7 +78,7 @@ pub fn main() -> std::process::ExitCode {
             }
             "--window-size" => {
                 if let Some((w, h)) = args.next().as_deref().and_then(|s| s.split_once('x')) {
-                    options.size = (w.parse().unwrap_or(390), h.parse().unwrap_or(844));
+                    options.size = (w.parse().unwrap_or(1200), h.parse().unwrap_or(800));
                 }
             }
             other => log::warn!("unknown argument {other}"),

@@ -255,7 +255,7 @@ The app opens in a desktop window (1200×800 points), with mouse, touchpad, touc
 nsh run my-app
 ```
 
-The app opens in a GTK window (390×844 points). It needs GTK 4.14 or later; see [Linux](./linux.md).
+The app opens in a GTK window (1200×800 points). It needs GTK 4.14 or later; see [Linux](./linux.md).
 
 #### Web
 
