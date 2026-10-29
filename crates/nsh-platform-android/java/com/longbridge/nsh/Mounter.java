@@ -751,9 +751,22 @@ final class Mounter {
         if (p instanceof ViewGroup) ((ViewGroup) p).removeView(v);
     }
 
+    /**
+     * An input with the focus is going away with {@code v}: the keyboard goes
+     * too, as on iOS (Android would keep it up with nothing to type into).
+     */
+    private void dropFocus(View v) {
+        View f = v != null ? v.findFocus() : null;
+        if (f == null || f == host) return;
+        InputMethodManager imm = (InputMethodManager) context.getSystemService(Context.INPUT_METHOD_SERVICE);
+        imm.hideSoftInputFromWindow(f.getWindowToken(), 0);
+        host.requestFocus();
+    }
+
     /** Removes a view from its parent, fading it out under a layout animation. */
     private void remove(int id) {
         View v = views.get(id);
+        dropFocus(v);
         Transition t = layoutAnimation != null ? layoutAnimation[2] : null;
         if (v == null || t == null || v.getParent() == null) {
             detach(v);
@@ -845,6 +858,7 @@ final class Mounter {
         screenOptions.remove(id);
         Animator running = layoutAnimators.get(id);
         if (running != null) running.cancel();
+        dropFocus(v);
         detach(v);
         if (v instanceof ImageBox) cancelImage((ImageBox) v);
         if (v instanceof WebBox) ((WebBox) v).destroy();
