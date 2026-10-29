@@ -108,6 +108,17 @@ final class Pressable {
         return true;
     }
 
+    /**
+     * A pan gate around the view activated (`panActivation`): the press ends
+     * as on {@code ACTION_CANCEL} (press out, no press on lift), while the
+     * finger goes on to the JS pan.
+     */
+    void cancel() {
+        if (!tracking) return;
+        tracking = false;
+        pressOut();
+    }
+
     /** An accessibility click (TalkBack's double tap). */
     void click() {
         if (mounter.wants(id, Native.PRESS)) mounter.event(id, Native.PRESS);
