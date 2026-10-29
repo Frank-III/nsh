@@ -29,6 +29,13 @@ pub const WS_PATH: &str = "/ws";
 /// Default dev-server port.
 pub const DEFAULT_PORT: u16 = 8790;
 
+/// The largest message either side reads. Each message is sent as one
+/// frame, so this is also the frame limit: a bundle and its source map are
+/// one binary frame each, and a large app's can pass tungstenite's default
+/// frame limit of 16 MiB.
+#[cfg(any(feature = "client", feature = "server"))]
+pub(crate) const MAX_MESSAGE_SIZE: usize = 64 << 20;
+
 /// Messages from a dev host to the server.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(tag = "type", rename_all = "snake_case")]
