@@ -136,6 +136,11 @@ nsh package --target android --run
 nsh package --target android --abi arm64-v8a
 ```
 
+通过明文 `http://` 访问 URL（例如局域网服务器）的应用，在 `nsh.json` 中设置
+`"android": { "cleartextTraffic": true }`（[项目结构](./project-structure.md#nshjson)）即可：发布版构建会设置
+`android:usesCleartextTraffic`，即 Android 的应用级明文策略，网页视图也包括在内。应用的 `capabilities.network`
+仍指明它可以访问的主机。开发构建为了连接开发服务器，始终允许明文 HTTP。
+
 ### 发布签名
 
 不传 `--keystore` 时，APK 使用标准的 debug 密钥（`~/.android/debug.keystore`，不存在时自动创建）签名，NSH

@@ -170,6 +170,9 @@ pub(crate) struct Apk<'a> {
     pub(crate) activity: &'a str,
     /// Development builds: debuggable, cleartext HTTP (the dev server).
     pub(crate) dev: bool,
+    /// Release builds that allow cleartext HTTP (`nsh.json`
+    /// `"android": { "cleartextTraffic": true }`).
+    pub(crate) cleartext: bool,
     /// A Rust app: its `libnsh.so` has the root, which `AppActivity` runs
     /// instead of a bundle (manifest meta-data `com.longbridge.nsh.RUST`).
     pub(crate) rust: bool,
@@ -267,7 +270,7 @@ fn manifest_xml(apk: &Apk<'_>) -> String {
     } else {
         ""
     };
-    let cleartext = if apk.dev {
+    let cleartext = if apk.dev || apk.cleartext {
         r#" android:usesCleartextTraffic="true""#
     } else {
         ""
@@ -532,6 +535,7 @@ mod tests {
             version_code: 1,
             activity: "com.longbridge.nsh.AppActivity",
             dev: false,
+            cleartext: false,
             rust,
             dark: false,
             runtime: std::path::Path::new("."),
@@ -549,5 +553,32 @@ mod tests {
         let at = manifest.find(flag).unwrap();
         assert!(application < at && at < activity, "{manifest}");
         assert!(!super::manifest_xml(&apk(false)).contains("com.longbridge.nsh.RUST"));
+    }
+
+    #[test]
+    fn cleartext_http_needs_a_dev_build_or_the_nsh_json_flag() {
+        let apk = |dev, cleartext| super::Apk {
+            package: "com.example.app",
+            label: "App",
+            version_name: "1.0",
+            version_code: 1,
+            activity: "com.longbridge.nsh.AppActivity",
+            dev,
+            cleartext,
+            rust: false,
+            dark: false,
+            runtime: std::path::Path::new("."),
+            abis: &[],
+            icon: None,
+            assets: Vec::new(),
+            signing: super::Signing::Debug,
+        };
+        let manifest = |dev, cleartext| super::manifest_xml(&apk(dev, cleartext));
+        let flag = r#"android:usesCleartextTraffic="true""#;
+        // A release build: only with `"android": { "cleartextTraffic": true }`.
+        assert!(!manifest(false, false).contains(flag));
+        assert!(manifest(false, true).contains(flag));
+        // A development build always allows the dev server's plain HTTP.
+        assert!(manifest(true, false).contains(flag));
     }
 }

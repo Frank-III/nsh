@@ -99,6 +99,9 @@ pub(crate) struct AppConfig {
     /// Read and checked by the bundler.
     #[serde(default, rename = "resolve")]
     _resolve: Option<serde::de::IgnoredAny>,
+    /// Android-only package options.
+    #[serde(default)]
+    pub(crate) android: AndroidConfig,
     /// The app's Rust crate: its builds are the app's own (`rust_app.rs`).
     #[serde(default, rename = "rust")]
     _rust: Option<serde::de::IgnoredAny>,
@@ -124,6 +127,19 @@ pub(crate) struct WebConfig {
     /// `capabilities`.
     #[serde(default)]
     pub(crate) connect: Vec<String>,
+}
+
+/// `nsh.json` `"android"`.
+#[derive(Debug, Default, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub(crate) struct AndroidConfig {
+    /// `"cleartextTraffic": true`: plain `http://` URLs are allowed in
+    /// release packages (`android:usesCleartextTraffic`), for example to
+    /// reach servers on the local network; the app's
+    /// `capabilities.network` still names the hosts it reaches.
+    /// Development builds always allow plain HTTP.
+    #[serde(default)]
+    pub(crate) cleartext_traffic: bool,
 }
 
 /// Options of `nsh package`.
@@ -503,6 +519,7 @@ fn package_android(
             version_code: config.build.unwrap_or(1),
             activity: "com.longbridge.nsh.AppActivity",
             dev: false,
+            cleartext: config.android.cleartext_traffic,
             rust: built.rust_root,
             dark: config.appearance.as_deref() == Some("dark"),
             runtime: &runtime,
@@ -1166,6 +1183,27 @@ mod tests {
             assert!(error.contains("inside the app's directory"), "{error}");
         }
         fs::remove_dir_all(&root).unwrap();
+    }
+
+    #[test]
+    fn android_cleartext_traffic_is_opt_in() {
+        let dir =
+            std::env::temp_dir().join(format!("nsh-android-cleartext-{}", std::process::id()));
+        fs::create_dir_all(&dir).unwrap();
+        let entry = dir.join("App.tsx");
+        let cleartext = |json: &str| {
+            fs::write(dir.join("nsh.json"), json).unwrap();
+            read_config(&entry).unwrap().android.cleartext_traffic
+        };
+        // Absent: release builds keep refusing plain HTTP.
+        assert!(!cleartext("{}"));
+        assert!(!cleartext(r#"{"android": {}}"#));
+        assert!(cleartext(r#"{"android": {"cleartextTraffic": true}}"#));
+        assert!(!cleartext(r#"{"android": {"cleartextTraffic": false}}"#));
+        // A misspelled sub-key is refused, not silently ignored.
+        fs::write(dir.join("nsh.json"), r#"{"android": {"cleartext": true}}"#).unwrap();
+        assert!(read_config(&entry).is_err());
+        fs::remove_dir_all(&dir).unwrap();
     }
 
     /// App icons are drawn at 1024 pixels, which `sips` alone cannot

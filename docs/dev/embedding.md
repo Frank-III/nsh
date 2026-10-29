@@ -5,7 +5,8 @@
   and a dark window theme, so the launch screen is in it) or flags. iOS: `.app`, `.ipa` with `--sign <identity>
   --profile <file.mobileprovision>` (entitlements come from the profile; icons are compiled by `actool` into `Assets.car`).
   Android: an APK assembled without Gradle (`aapt2 link`, native libraries stored uncompressed and 16 KB ZIP aligned, `apksigner`;
-  the debug key unless `--keystore`). Linux: a directory `<name>/` with the release runner (`crates/nsh-linux-app`) as
+  the debug key unless `--keystore`; `android:usesCleartextTraffic` when `nsh.json` sets
+  `android.cleartextTraffic`). Linux: a directory `<name>/` with the release runner (`crates/nsh-linux-app`) as
   the executable, `nsh/bundle.nshc`, `nsh/assets/` and `nsh/app.json` (the window title and the GTK application id,
   which the runner reads next to itself), `<id>.desktop` (`StartupWMClass` is the id, which GTK makes the window's
   app id) and `<id>.png`, plus the same as `<name>.tar.gz`; GTK 4, Pango and WebKitGTK 6.0 (the runner's default
