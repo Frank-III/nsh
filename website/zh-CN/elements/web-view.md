@@ -162,5 +162,6 @@ function Bridge() {
 ## 平台说明
 
 - iOS 在第一次创建 web view 时才加载 WebKit，应用在显示 web view 时才为此付出开销。
+- 没有自带背景的页面会显示元素的 `backgroundColor`；为期待白色画布的页面设置一个（比如白色）。元素没有不透明 `backgroundColor` 时，iOS 和 macOS 之外的画布为白色，在 iOS 和 macOS 上视图保持透明；在 Android 上画布始终为白色。
 - 在 Android 上，页面的 `postMessage` 调用会到达后台线程，再按顺序转发给应用。
 - 要给 web view 加圆角，设置圆角半径和 `overflow: "hidden"`（`.overflow_hidden()`）。
