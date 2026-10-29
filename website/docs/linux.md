@@ -39,7 +39,7 @@ terminal; a change to the crate's Rust code builds the runner again and restarts
 root from the crate's `src/main.rs`, which `nsh init --template rust` writes: [`run_app`](#embedding-in-a-gtk-app)
 with `AppSource::Rust`.
 
-A TSX app names its entry, and opens in a 390×844 window by default, with hot reload, logs in the terminal and the
+A TSX app names its entry, and opens in a 1200×800 window by default, with hot reload, logs in the terminal and the
 error overlay as on the other targets:
 
 ```sh

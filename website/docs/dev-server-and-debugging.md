@@ -49,7 +49,7 @@ What each target does:
   closing the window ends `nsh run`.
 - **`macos`** (macOS) runs the AppKit development host, a desktop app in a 1200×800 window, the same way; Cmd+R
   reloads the latest build. Requires macOS 14 or later ([macOS](./macos.md)).
-- **`linux`** (Linux) runs the GTK development host in a 390×844 window, the same way: stopping `nsh run` closes
+- **`linux`** (Linux) runs the GTK development host in a 1200×800 window, the same way: stopping `nsh run` closes
   it, closing the window ends `nsh run`. Requires GTK 4.14 or later ([Linux](./linux.md)).
 - **`windows`** (Windows) runs the Win32 development host in a 1200×800 window, the same way; the host never outlives
   `nsh run`, even when the console is closed. Requires Windows 10 1809 or later ([Windows](./windows.md)).

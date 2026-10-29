@@ -237,7 +237,7 @@ nsh run my-app
 nsh run my-app
 ```
 
-应用会在一个 GTK 窗口（390×844 点）中打开。需要 GTK 4.14 及以上；见 [Linux](./linux.md)。
+应用会在一个 GTK 窗口（1200×800 点）中打开。需要 GTK 4.14 及以上；见 [Linux](./linux.md)。
 
 #### Web
 
