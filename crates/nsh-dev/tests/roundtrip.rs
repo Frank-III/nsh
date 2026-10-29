@@ -460,3 +460,110 @@ fn a_traced_test_session_hears_the_batches_before_the_step_ends() {
         ["Create { id: 2, kind: View }"]
     );
 }
+
+/// A large app's development bundle is one binary frame past
+/// tungstenite's default 16 MiB frame limit: the host still gets it.
+#[test]
+fn a_bundle_over_16_mib_reaches_the_host() {
+    let server = DevServer::start("127.0.0.1:0".parse().unwrap(), "bc-1", None, |_| {}).unwrap();
+    let bytecode = vec![7u8; 17 << 20];
+    server.publish(
+        bytecode.clone(),
+        "v1".into(),
+        Some("{\"version\":3}".into()),
+        AppInfo::default(),
+        None,
+        Vec::new(),
+    );
+    let url = format!("ws://{}{WS_PATH}", server.local_addr());
+    let (tx, rx) = mpsc::channel();
+    let _client = DevClient::start(url, host("test-device", "bc-1"), move |e| {
+        let _ = tx.send(e);
+    })
+    .unwrap();
+    // Without the larger frame limit the host drops the connection here: a
+    // `Disconnected` before the bundle fails the test.
+    loop {
+        match rx.recv_timeout(TIMEOUT).expect("the bundle") {
+            DevEvent::Bundle {
+                version: 1,
+                bytes,
+                source_map,
+                ..
+            } => {
+                assert!(bytes == bytecode, "the bundle arrived whole");
+                assert_eq!(source_map.as_deref(), Some("{\"version\":3}"));
+                break;
+            }
+            DevEvent::Connected => continue,
+            other => panic!("{other:?} instead of the bundle"),
+        }
+    }
+}
+
+/// A frame the host cannot read ends the session: the warning saying why
+/// is a log line the host's logger queues while still connected, and it
+/// reaches the server once the host reconnects.
+#[test]
+fn a_frame_past_the_limit_is_reported_to_the_server() {
+    use std::{io::Write, net::TcpListener, sync::Mutex};
+
+    use nsh_dev::protocol::ClientMessage;
+    use tungstenite::Message;
+
+    /// The client the logger forwards to, as a host's logger does while
+    /// connected.
+    static CLIENT: Mutex<Option<DevClient>> = Mutex::new(None);
+    struct Forward;
+    impl log::Log for Forward {
+        fn enabled(&self, metadata: &log::Metadata<'_>) -> bool {
+            metadata.target().starts_with("nsh_dev")
+        }
+
+        fn log(&self, record: &log::Record<'_>) {
+            if !self.enabled(record.metadata()) {
+                return;
+            }
+            if let Some(client) = CLIENT.lock().unwrap().as_ref() {
+                let message = record.args().to_string();
+                client.log(record.level().into(), record.target(), &message);
+            }
+        }
+
+        fn flush(&self) {}
+    }
+    log::set_logger(&Forward).unwrap();
+    log::set_max_level(log::LevelFilter::Warn);
+
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let url = format!("ws://{}{WS_PATH}", listener.local_addr().unwrap());
+    let client = DevClient::start(url, host("test-device", "bc-1"), |_| {}).unwrap();
+    *CLIENT.lock().unwrap() = Some(client);
+    let accept = || {
+        let (stream, _) = listener.accept().unwrap();
+        stream.set_read_timeout(Some(TIMEOUT)).unwrap();
+        tungstenite::accept(stream).unwrap()
+    };
+
+    let mut first = accept();
+    assert!(matches!(first.read().expect("the hello"), Message::Text(_)));
+    // The header of a binary frame one byte past the client's 64 MiB limit
+    // is enough: the client refuses the frame on reading its length.
+    let mut header = vec![0x82, 127];
+    header.extend_from_slice(&((64u64 << 20) + 1).to_be_bytes());
+    first.get_mut().write_all(&header).unwrap();
+
+    let mut second = accept();
+    loop {
+        let Message::Text(text) = second.read().expect("the warning") else {
+            continue;
+        };
+        if let ClientMessage::Log { level, message, .. } = serde_json::from_str(&text).unwrap()
+            && message.starts_with("closing the dev server connection")
+        {
+            assert_eq!(level, LogLevel::Warn);
+            break;
+        }
+    }
+    drop(CLIENT.lock().unwrap().take());
+}

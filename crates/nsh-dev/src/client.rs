@@ -1,16 +1,21 @@
 use std::{
     io::ErrorKind,
     net::TcpStream,
-    sync::mpsc::{self, Receiver, SyncSender, TryRecvError},
+    sync::{
+        Arc,
+        mpsc::{self, Receiver, SyncSender, TryRecvError},
+    },
     thread,
     time::Duration,
 };
 
-use tungstenite::{Message, WebSocket, stream::MaybeTlsStream};
+use tungstenite::{
+    Message, WebSocket, error::ProtocolError, protocol::WebSocketConfig, stream::MaybeTlsStream,
+};
 
 use crate::protocol::{
-    BundleFormat, ClientMessage, HostPlatform, LogLevel, PROTOCOL_VERSION, ServerMessage,
-    StepOutcome, TestStep,
+    BundleFormat, ClientMessage, HostPlatform, LogLevel, MAX_MESSAGE_SIZE, PROTOCOL_VERSION,
+    ServerMessage, StepOutcome, TestStep,
 };
 
 /// Something the dev server told the host.
@@ -126,6 +131,8 @@ pub struct DevClient {
     logs: SyncSender<ClientMessage>,
     /// Steps' outcomes, which are never dropped.
     replies: mpsc::Sender<ClientMessage>,
+    /// Held as long as the client: the thread stops retrying once it goes.
+    _alive: Arc<()>,
 }
 
 /// How long a read may block before pending log lines are flushed.
@@ -142,6 +149,8 @@ impl DevClient {
     ) -> std::io::Result<DevClient> {
         let (logs, log_rx) = mpsc::sync_channel(LOG_QUEUE);
         let (replies, reply_rx) = mpsc::channel();
+        let alive = Arc::new(());
+        let dropped = Arc::downgrade(&alive);
         let hello = ClientMessage::Hello {
             protocol: PROTOCOL_VERSION,
             bytecode_version: host.bytecode_version,
@@ -150,16 +159,23 @@ impl DevClient {
             ui_sets: Some(host.ui_sets),
             tests: host.tests,
         };
+        // A bundle is one frame: read frames as large as the server sends.
+        let config = WebSocketConfig::default()
+            .max_message_size(Some(MAX_MESSAGE_SIZE))
+            .max_frame_size(Some(MAX_MESSAGE_SIZE));
         thread::Builder::new()
             .name("nsh-dev-client".into())
             .spawn(move || {
                 let mut backoff = Duration::from_millis(100);
                 loop {
-                    // Dropped while disconnected: stop retrying.
-                    if let Err(TryRecvError::Disconnected) = log_rx.try_recv() {
+                    // Dropped while disconnected: stop retrying. Asked
+                    // without taking a line off the log queue, which the next
+                    // session sends first (the line saying why the last one
+                    // ended among them).
+                    if dropped.strong_count() == 0 {
                         return;
                     }
-                    match tungstenite::connect(url.as_str()) {
+                    match tungstenite::client::connect_with_config(url.as_str(), Some(config), 3) {
                         Ok((socket, _)) => {
                             backoff = Duration::from_millis(100);
                             on_event(DevEvent::Connected);
@@ -175,7 +191,11 @@ impl DevClient {
                     thread::sleep(backoff);
                 }
             })?;
-        Ok(DevClient { logs, replies })
+        Ok(DevClient {
+            logs,
+            replies,
+            _alive: alive,
+        })
     }
 
     /// Forwards the app's request `id` to the test, which answers with
@@ -261,7 +281,19 @@ fn session(
             {
                 continue;
             }
-            Err(_) => return Err(SessionEnd::Disconnected),
+            // The server went away (it stopped or restarted).
+            Err(
+                tungstenite::Error::ConnectionClosed
+                | tungstenite::Error::AlreadyClosed
+                | tungstenite::Error::Io(_)
+                | tungstenite::Error::Protocol(ProtocolError::ResetWithoutClosingHandshake),
+            ) => return Err(SessionEnd::Disconnected),
+            // Anything else (a frame past the limit, a broken frame) ends the
+            // session too, and the client reconnects: say why.
+            Err(err) => {
+                log::warn!("closing the dev server connection: {err}");
+                return Err(SessionEnd::Disconnected);
+            }
         };
         match msg {
             Message::Text(text) => match serde_json::from_str::<ServerMessage>(&text) {
