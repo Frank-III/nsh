@@ -665,6 +665,7 @@ pub(crate) fn install_android_host(
                 version_code: 1,
                 activity: "com.longbridge.nsh.DevActivity",
                 dev: true,
+                cleartext: false,
                 rust: false,
                 dark: false,
                 runtime,
