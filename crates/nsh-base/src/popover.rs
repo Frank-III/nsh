@@ -156,16 +156,34 @@ pub fn Popover(props: PopoverProps, cx: Scope<PopoverEvent>) -> impl IntoElement
                 // The trigger may be a toolbar's item; the content is not.
                 leave_bar();
                 // Touch screens: the press outside is the popover's (not
-                // while it goes).
-                let backdrop = when(
-                    move || !desktop && open.get() && props.close_on_press_outside.get(),
-                    move || {
-                        overlay()
-                            .inset_0()
-                            .focusable(false)
-                            .on_press(move || cancel(OpenChangeReason::PressOutside, true))
-                    },
-                );
+                // while it goes). The backdrop is made with the popup and
+                // before it, so it is shown below it (an overlay shown
+                // later is on top); made again later, as a branch that
+                // comes and goes would be, it would cover the popup and
+                // take the presses meant for its content. While it is not
+                // wanted it lets presses through and is hidden from
+                // assistive technologies (screen readers activate a
+                // pressable view whatever its pointer events).
+                let wanted = move || open.get() && props.close_on_press_outside.get();
+                let backdrop = (!desktop).then(|| {
+                    overlay()
+                        .inset_0()
+                        .focusable(false)
+                        .accessibility_elements_hidden(move || !wanted())
+                        .pointer_events(move || {
+                            if wanted() {
+                                PointerEvents::Auto
+                            } else {
+                                PointerEvents::None
+                            }
+                        })
+                        .on_press(move || {
+                            cancel(
+                                OpenChangeReason::PressOutside,
+                                props.close_on_press_outside.get_untracked(),
+                            )
+                        })
+                });
                 let popup = overlay()
                     .anchor_content(&anchor)
                     .placement(props.placement)
@@ -192,7 +210,9 @@ pub fn Popover(props: PopoverProps, cx: Scope<PopoverEvent>) -> impl IntoElement
                         )
                     })
                     .child(props.children);
-                vec![backdrop.into_element(), popup.into_element()]
+                let mut parts = backdrop.into_elements();
+                parts.push(popup.into_element());
+                parts
             },
         ))
 }
