@@ -20,7 +20,8 @@ use nsh_core::{
     NodeId, PanActivation, Points, TouchEvent, TouchPhase, TouchPoint, geometry::point,
 };
 use objc2::{
-    DefinedClass, MainThreadMarker, MainThreadOnly, Message, define_class, msg_send, rc::Retained,
+    ClassType, DefinedClass, MainThreadMarker, MainThreadOnly, Message, define_class, msg_send,
+    rc::Retained,
 };
 use objc2_core_foundation::CGPoint;
 use objc2_foundation::{NSObject, NSObjectProtocol, NSSet};
@@ -318,11 +319,16 @@ define_class!(
             self.holds_back(other)
         }
 
-        /// Recognizers on the same view (`pan`, `pinch`) go on with it.
+        /// Recognizers on the same view (`pan`, `pinch`) go on with it;
+        /// presses do not: an activated gate means the finger's pan is
+        /// the gesture, so the taps under it cancel.
         #[unsafe(method(canPreventGestureRecognizer:))]
         fn can_prevent(&self, other: &UIGestureRecognizer) -> bool {
             match (self.view(), other.view()) {
-                (Some(a), Some(b)) => !std::ptr::eq::<UIView>(&*a, &*b),
+                (Some(a), Some(b)) => {
+                    !std::ptr::eq::<UIView>(&*a, &*b)
+                        || other.isKindOfClass(crate::press::PressRecognizer::class())
+                }
                 _ => true,
             }
         }

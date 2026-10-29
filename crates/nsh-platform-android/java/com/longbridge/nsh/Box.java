@@ -437,6 +437,17 @@ class Box extends ViewGroup implements Node {
         mounter.pressFeedback(this, id, true, pressX, pressY);
     }
 
+    /**
+     * A pan gate around this view activated (`panActivation`): the touch is
+     * the JS pan's now, so it presses out and doesn't press this view when
+     * the finger lifts (the lift ends the JS pan, not a press).
+     */
+    void cancelPress() {
+        if (!tracking || panning) return;
+        tracking = false;
+        pressOut();
+    }
+
     private void pressOut() {
         removeCallbacks(pressIn);
         removeCallbacks(longPress);
