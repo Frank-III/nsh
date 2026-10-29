@@ -4,6 +4,7 @@ import android.annotation.SuppressLint;
 import android.content.Context;
 import android.graphics.Bitmap;
 import android.view.MotionEvent;
+import android.view.View;
 import android.webkit.JavascriptInterface;
 import android.webkit.WebResourceError;
 import android.webkit.WebResourceRequest;
@@ -32,8 +33,11 @@ final class WebBox extends WidgetBox {
         web.addJavascriptInterface(new Bridge(), "nsh");
         web.setWebViewClient(new Client());
         web.setOnTouchListener((v, e) -> {
-            if (e.getActionMasked() == MotionEvent.ACTION_DOWN) {
-                // The page scrolls itself: keep enclosing scroll views out.
+            // A page that scrolls itself keeps enclosing scroll views out. One
+            // that doesn't takes no moves and leaves them free to intercept,
+            // so a drag that starts on it scrolls them. Taps still reach it:
+            // they intercept only past their slop.
+            if (scrollable && e.getActionMasked() == MotionEvent.ACTION_DOWN) {
                 v.getParent().requestDisallowInterceptTouchEvent(true);
             }
             return !scrollable && e.getActionMasked() == MotionEvent.ACTION_MOVE;
@@ -96,7 +100,11 @@ final class WebBox extends WidgetBox {
                 || !Objects.equals(injectedBefore, this.injectedBefore);
         this.injected = injected;
         this.injectedBefore = injectedBefore;
-        this.scrollable = scrollable;
+        if (scrollable != this.scrollable) {
+            this.scrollable = scrollable;
+            // No stretch or glow at the edges of a page that doesn't scroll.
+            web.setOverScrollMode(scrollable ? View.OVER_SCROLL_IF_CONTENT_SCROLLS : View.OVER_SCROLL_NEVER);
+        }
         web.setVerticalScrollBarEnabled(scrollable);
         web.setHorizontalScrollBarEnabled(scrollable);
         web.getSettings().setJavaScriptEnabled(javaScriptEnabled);
