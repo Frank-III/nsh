@@ -5,6 +5,7 @@ import android.content.Context;
 import android.graphics.Bitmap;
 import android.view.MotionEvent;
 import android.webkit.JavascriptInterface;
+import android.webkit.RenderProcessGoneDetail;
 import android.webkit.WebResourceError;
 import android.webkit.WebResourceRequest;
 import android.webkit.WebView;
@@ -24,6 +25,8 @@ final class WebBox extends WidgetBox {
     private Object[] source;
     private String injected, injectedBefore, userAgent;
     private boolean scrollable = true;
+    /** The page's renderer died: the WebView is destroyed and must not be touched again. */
+    private boolean gone;
 
     WebBox(Context context, Mounter mounter, int id) {
         super(context, mounter, id, new WebView(context));
@@ -79,9 +82,36 @@ final class WebBox extends WidgetBox {
             mounter.eventMap(id, Native.ERROR, new String[] {"message", "url"},
                     new Object[] {String.valueOf(error.getDescription()), request.getUrl().toString()});
         }
+
+        /**
+         * The page's renderer crashed or was killed for memory. Unhandled, the
+         * system takes the whole app down with it; the view can't be used
+         * again, so drop it and report an error (the app may show something
+         * else).
+         */
+        @Override
+        public boolean onRenderProcessGone(WebView view, RenderProcessGoneDetail detail) {
+            String how = detail.didCrash() ? "crashed" : "was killed";
+            android.util.Log.w("nsh", "web view renderer gone (" + how + ")");
+            String url = view.getUrl() != null ? view.getUrl() : "";
+            gone = true;
+            removeView(web);
+            web.destroy();
+            mounter.eventMap(id, Native.ERROR, new String[] {"message", "url"},
+                    new Object[] {"the web view's renderer " + how, url});
+            return true;
+        }
+    }
+
+    /** The renderer is gone and the widget detached: sizing must not touch it. */
+    @Override
+    protected void onSizeChanged(int w, int h, int oldw, int oldh) {
+        if (gone) return;
+        super.onSizeChanged(w, h, oldw, oldh);
     }
 
     private void state(int kind, String url, boolean loading) {
+        if (gone) return;
         String[] keys = {"url", "title", "loading", "canGoBack", "canGoForward"};
         Object[] values = {url, Objects.toString(web.getTitle(), ""), loading, web.canGoBack(), web.canGoForward()};
         if (mounter.wants(id, kind)) mounter.eventMap(id, kind, keys, values);
@@ -92,6 +122,10 @@ final class WebBox extends WidgetBox {
 
     void configure(Object[] source, String injected, String injectedBefore, String userAgent,
             boolean scrollable, boolean javaScriptEnabled) {
+        if (gone) {
+            android.util.Log.w("nsh", "web view renderer is gone; ignoring configure");
+            return;
+        }
         boolean scriptsChanged = !Objects.equals(injected, this.injected)
                 || !Objects.equals(injectedBefore, this.injectedBefore);
         this.injected = injected;
@@ -116,6 +150,10 @@ final class WebBox extends WidgetBox {
 
     /** Commands 4–9 of `Mounter.command`. */
     void command(int kind, String text) {
+        if (gone) {
+            android.util.Log.w("nsh", "web view renderer is gone; ignoring command " + kind);
+            return;
+        }
         switch (kind) {
             case 4: web.reload(); break;
             case 5: web.goBack(); break;
@@ -131,6 +169,7 @@ final class WebBox extends WidgetBox {
     }
 
     void destroy() {
+        if (gone) return;
         web.stopLoading();
         web.destroy();
     }
