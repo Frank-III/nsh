@@ -15,7 +15,7 @@ use std::{
 
 use nsh_base::{MenuEvent, PopoverEvent, menu, menu_item, popover, submenu, tooltip};
 use nsh_core::{
-    MountItem, NodeId, Size,
+    EventKind, EventPayload, MountItem, NodeId, Size,
     element::Root,
     platform::{Idiom, Os},
     prelude::*,
@@ -24,8 +24,9 @@ use nsh_engine::EngineConfig;
 use nsh_testing::Headless;
 
 /// What the platform was sent: each view's parent and test id, the
-/// opacities of its styles in order, whether it takes presses, and the
-/// views put in each view in order (the last one on top).
+/// opacities of its styles in order, whether it takes presses, whether it
+/// is hidden from assistive technologies, and the views put in each view
+/// in order (the last one on top).
 #[derive(Default)]
 struct Seen {
     parents: HashMap<NodeId, NodeId>,
@@ -33,6 +34,7 @@ struct Seen {
     test_ids: HashMap<String, NodeId>,
     styles: HashMap<NodeId, Vec<f32>>,
     inert: HashMap<NodeId, bool>,
+    hidden: HashMap<NodeId, bool>,
 }
 
 impl Seen {
@@ -68,6 +70,38 @@ impl App {
         let seen = self.seen.lock().unwrap();
         seen.inert.get(&seen.popup(id)).copied().unwrap_or(false)
     }
+
+    /// Whether view `id` takes no presses.
+    fn inert(&self, id: NodeId) -> bool {
+        self.seen
+            .lock()
+            .unwrap()
+            .inert
+            .get(&id)
+            .copied()
+            .unwrap_or(false)
+    }
+
+    /// Whether view `id` is hidden from assistive technologies.
+    fn hidden(&self, id: NodeId) -> bool {
+        self.seen
+            .lock()
+            .unwrap()
+            .hidden
+            .get(&id)
+            .copied()
+            .unwrap_or(false)
+    }
+
+    /// A press on view `id`, as a platform sends it whatever takes the
+    /// touches (a screen reader's activation).
+    fn press_view(&mut self, id: NodeId) {
+        self.app
+            .engine()
+            .control()
+            .dispatch_event(id, EventKind::Press, EventPayload::None);
+        self.app.run_for(Duration::from_millis(50)).unwrap();
+    }
 }
 
 /// `root` on a Mac, on a manual clock; `reduce_motion`: the user asked for
@@ -99,6 +133,7 @@ fn start_on(root: Root, reduce_motion: bool, os: Os, idiom: Idiom) -> App {
                     }
                     seen.inert
                         .insert(*id, props.pointer_events == PointerEvents::None);
+                    seen.hidden.insert(*id, props.accessibility.hidden);
                 }
                 MountItem::Insert {
                     parent,
@@ -297,6 +332,120 @@ fn on_a_phone_a_popover_is_above_its_backdrop() {
         !seen.inert.get(&backdrop).copied().unwrap_or(false),
         "the backdrop under it takes the presses outside"
     );
+    assert!(
+        !seen.hidden.get(&backdrop).copied().unwrap_or(true),
+        "the open backdrop is an element, as before"
+    );
+}
+
+/// The touch screens' popover backdrop: the overlay under the popup.
+fn phone_backdrop(app: &App) -> NodeId {
+    let seen = app.seen.lock().unwrap();
+    let popup = seen.popup("body");
+    let stack = &seen.stacks[&seen.parents[&popup]];
+    assert!(stack.len() >= 2, "the backdrop and the popup: {stack:?}");
+    assert_eq!(stack.last(), Some(&popup), "the popup stays on top");
+    stack[stack.len() - 2]
+}
+
+#[derive(Clone, PartialEq, Props)]
+struct TouchPopoverProps {
+    /// `closeOnPressOutside`.
+    close_on_press_outside: bool,
+}
+
+/// A popover whose popup fades out for 200 ms, with its open changes on
+/// screen.
+#[component]
+fn TouchPopoverScreen(props: TouchPopoverProps) -> impl IntoElement {
+    let changes = signal(Vec::<String>::new());
+    view()
+        .pl(px(40.0))
+        .child(text(move || {
+            format!("Changes: {}", changes.get().join(", "))
+        }))
+        .child(view().h(px(60.0)))
+        .child(
+            popover()
+                .close_on_press_outside(props.close_on_press_outside)
+                .popup_class("transition-opacity duration-200")
+                .popup_ending_class(Some(SharedString::from("opacity-0")))
+                .on_open_change(move |e: &PopoverEvent| {
+                    if let PopoverEvent::OpenChange(open, reason) = e {
+                        changes.update(|c| c.push(format!("{open} {reason:?}")));
+                    }
+                })
+                .trigger(
+                    view()
+                        .test_id("trigger")
+                        .w(px(100.0))
+                        .h(px(30.0))
+                        .child(text("Details")),
+                )
+                .child(view().test_id("body").h(px(40.0)).child(text("Body"))),
+        )
+}
+
+fn touch_popover_app(os: Os, close_on_press_outside: bool) -> App {
+    let mut app = start_on(
+        Root::new::<TouchPopoverScreen>(move || TouchPopoverProps {
+            close_on_press_outside,
+        }),
+        false,
+        os,
+        Idiom::Phone,
+    );
+    app.app.press("id:trigger").unwrap();
+    app.app.wait_for("Body").unwrap();
+    app.app.run_for(Duration::from_millis(50)).unwrap();
+    app
+}
+
+#[test]
+fn on_a_phone_an_inert_popover_backdrop_is_hidden_while_it_goes() {
+    for os in [Os::Ios, Os::Android] {
+        let mut app = touch_popover_app(os, true);
+        let below = phone_backdrop(&app);
+        assert!(!app.hidden(below), "{os:?}: seen while it takes presses");
+        app.press_view(below);
+        assert!(
+            app.app
+                .shows("Changes: true TriggerPress, false PressOutside"),
+            "{os:?}: a press on it closes the popover"
+        );
+        assert!(app.app.shows("Body"), "{os:?}: kept while it goes");
+        assert_eq!(phone_backdrop(&app), below, "{os:?}: the same backdrop");
+        assert!(app.inert(below), "{os:?}: inert while it goes");
+        assert!(app.hidden(below), "{os:?}: hidden while it goes");
+        app.press_view(below);
+        assert!(
+            app.app
+                .shows("Changes: true TriggerPress, false PressOutside"),
+            "{os:?}: no change from a press while it goes"
+        );
+        app.app.press("id:trigger").unwrap();
+        app.app.run_for(Duration::from_millis(50)).unwrap();
+        assert!(app.app.shows("Body"));
+        let again = phone_backdrop(&app);
+        assert!(!app.inert(again), "{os:?}: takes presses once opened again");
+        assert!(!app.hidden(again), "{os:?}: seen once opened again");
+    }
+}
+
+#[test]
+fn on_a_phone_a_popover_that_stays_on_presses_outside_hides_its_backdrop() {
+    for os in [Os::Ios, Os::Android] {
+        let mut app = touch_popover_app(os, false);
+        let below = phone_backdrop(&app);
+        assert!(app.inert(below), "{os:?}: presses go through it");
+        assert!(app.hidden(below), "{os:?}: no element for screen readers");
+        app.press_view(below);
+        assert!(
+            app.app.shows("Changes: true TriggerPress"),
+            "{os:?}: a press on it does not close the popover"
+        );
+        assert!(app.app.shows("Body"), "{os:?}: still open");
+    }
 }
 
 /// A desktop menu with a submenu, both fading for 200 ms on their way out.
