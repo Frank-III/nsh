@@ -726,13 +726,16 @@ final class Mounter {
             Dynamic d = statics.get(childId);
             if (d != null) applyDynamic(child, d);
         }
-        detach(child);
-        int index = -1;
-        if (beforeId >= 0) {
-            View before = views.get(beforeId);
-            if (before != null) index = group.indexOfChild(before);
+        View before = beforeId >= 0 ? views.get(beforeId) : null;
+        if (child.getParent() == group && group instanceof Box && before != child
+                && (before == null || before.getParent() == group)) {
+            // A restack in the same container keeps the view in the window.
+            ((Box) group).restack(child, before);
+        } else {
+            detach(child);
+            int index = before != null ? group.indexOfChild(before) : -1;
+            group.addView(child, index);
         }
-        group.addView(child, index);
         Box.place(child);
         // Cells of a mirrored list flip back.
         int mirror = parent instanceof ScrollBox && mirrors.get(parentId) == 1 ? 2 : 0;
