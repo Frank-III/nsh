@@ -175,8 +175,11 @@ fn connect(mtm: MainThreadMarker, scene: &UIWindowScene) {
     let Some((source, options)) = LAUNCH.lock().expect("launch lock").take() else {
         return log::error!("no app to launch");
     };
-    if let Some(restrictions) = scene.sizeRestrictions() {
-        // Only Mac Catalyst has resizable windows.
+    // Mac Catalyst's window is an iPhone-sized simulator; elsewhere the
+    // system sizes the scene (iPhone Duo's displays, for one).
+    if cfg!(target_abi = "macabi")
+        && let Some(restrictions) = scene.sizeRestrictions()
+    {
         restrictions.setMinimumSize(CATALYST_WINDOW);
         restrictions.setMaximumSize(CATALYST_WINDOW);
     }

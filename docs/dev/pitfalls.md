@@ -176,7 +176,8 @@ Things that were found the hard way. Read the section of the area you change bef
   its scroll offset).
 - **Catalyst**: `UIDeviceFamily` must include 6 (Mac idiom), otherwise the UI is scaled to 77%. Under Catalyst the container extends below the
   title bar, so overlays are constrained to `safeAreaLayoutGuide`. UIDevice reports "iPad" under Catalyst. Use the UIScene lifecycle
-  (`UIScreen.mainScreen` and `UIWindow initWithFrame` are deprecated). The window size is fixed to 390×844 through `sizeRestrictions`.
+  (`UIScreen.mainScreen` and `UIWindow initWithFrame` are deprecated). The window size is fixed to 390×844 through `sizeRestrictions`,
+  on Catalyst only: iOS scenes report `sizeRestrictions` too (iPhone Duo on iOS 27), so the pin is gated on the Catalyst target.
 - Methods in `define_class!` that return `Retained<T>` need `#[unsafe(method_id(...))]`. Classes UIKit instantiates by name (AppDelegate,
   SceneDelegate) cannot have ivars; keep their state in statics or thread locals.
 - **UIKit implements the `UITextInputTraits` setters of `UITextField` by message forwarding**: objc2's debug-build signature
