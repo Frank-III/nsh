@@ -143,6 +143,30 @@ define_class!(
     pub(crate) struct RootView;
 
     impl RootView {
+        #[unsafe(method_id(keyCommands))]
+        fn key_commands(&self) -> Option<Retained<objc2_foundation::NSArray<AnyObject>>> {
+            self.target().and_then(|target| crate::keymap::commands(self, &target, false))
+        }
+
+        #[unsafe(method(nshKeyCommand:))]
+        fn key_command(&self, sender: &AnyObject) {
+            if let Some(target) = self.target() {
+                crate::keymap::command(self, &target, sender);
+            }
+        }
+
+        #[unsafe(method(canBecomeFirstResponder))]
+        fn can_become_first_responder(&self) -> bool { true }
+
+        #[unsafe(method(didMoveToWindow))]
+        fn did_move_to_window(&self) {
+            // SAFETY: calling the superclass implementation.
+            let _: () = unsafe { msg_send![super(self), didMoveToWindow] };
+            if let Some(window) = self.window() {
+                crate::keymap::restore(&window);
+            }
+        }
+
         #[unsafe(method(layoutSubviews))]
         fn layout_subviews(&self) {
             // SAFETY: calling the superclass implementation.
@@ -223,7 +247,7 @@ define_class!(
         fn presses_began(&self, presses: &AnyObject, event: Option<&AnyObject>) {
             let consumed = self
                 .target()
-                .is_some_and(|target| crate::keymap::root_began(&target, presses));
+                .is_some_and(|target| crate::keymap::root_began(&target, presses, self.isFirstResponder()));
             if !consumed {
                 // SAFETY: calling the superclass implementation.
                 let _: () = unsafe { msg_send![super(self), pressesBegan: presses, withEvent: event] };
@@ -387,6 +411,31 @@ impl RootView {
             ]
         };
         let mut observers = this.ivars().observers.borrow_mut();
+        // Include hosted UIKit editors without replacing their delegates.
+        let weak = Weak::from_retained(this);
+        let editing_ended = RcBlock::new(move |_: NonNull<NSNotification>| {
+            if let Some(view) = weak.load()
+                && let Some(window) = view.window()
+            {
+                crate::keymap::restore(&window);
+            }
+        });
+        // SAFETY: UIKit's notification names; callbacks run on the main queue.
+        for name in unsafe {
+            [
+                objc2_ui_kit::UITextFieldTextDidEndEditingNotification,
+                objc2_ui_kit::UITextViewTextDidEndEditingNotification,
+            ]
+        } {
+            observers.push(unsafe {
+                center.addObserverForName_object_queue_usingBlock(
+                    Some(name),
+                    None,
+                    Some(&NSOperationQueue::mainQueue()),
+                    &editing_ended,
+                )
+            });
+        }
         // Accessibility settings that classes (`motion-reduce:`) and JS read.
         let weak = Weak::from_retained(this);
         let settings = RcBlock::new(move |_: NonNull<NSNotification>| {
