@@ -317,6 +317,9 @@ pub struct Ripple {
 /// Non-style properties of a view that only the platform needs.
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct ViewProps {
+    /// Logical parent for touch routing when an overlay is mounted in a root view.
+    /// This does not affect native hit-testing.
+    pub touch_parent: Option<crate::NodeId>,
     /// Which touches the view and its subtree receive.
     pub pointer_events: PointerEvents,
     /// Extends the touch area beyond the view's bounds.

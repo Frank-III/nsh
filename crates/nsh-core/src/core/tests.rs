@@ -17384,6 +17384,56 @@ fn static_views_ignore_their_insets() {
 }
 
 #[test]
+fn overlay_touch_parents_follow_reparenting_and_fixed_views_reset() {
+    let mut c = core();
+    add(&mut c, 2, Tag::View, ROOT_ID, &[]);
+    add(&mut c, 4, Tag::View, ROOT_ID, &[]);
+    add(&mut c, 6, Tag::Overlay, 2, &[]);
+    add(&mut c, 8, Tag::Overlay, 6, &[]);
+    let batch = c.commit().unwrap();
+    let parent = |batch: &MountBatch, id| {
+        batch.items.iter().rev().find_map(|item| match item {
+            MountItem::ViewProps { id: node, props } if *node == id => Some(props.touch_parent),
+            _ => None,
+        })
+    };
+    assert_eq!(parent(&batch, 6), Some(Some(2)));
+    assert_eq!(parent(&batch, 8), Some(Some(6)));
+    for item in &batch.items {
+        if let MountItem::ViewProps { id: 6 | 8, props } = item {
+            let mut without_parent = props.clone();
+            without_parent.touch_parent = None;
+            assert_eq!(*without_parent, crate::ViewProps::default());
+        }
+    }
+    apply(
+        &mut c,
+        vec![Op::Insert {
+            parent: 4,
+            child: 6,
+            before: None,
+        }],
+    );
+    let batch = c.commit().unwrap();
+    assert_eq!(parent(&batch, 6), Some(Some(4)));
+    add(
+        &mut c,
+        10,
+        Tag::View,
+        2,
+        &[("position", StyleValue::Str("fixed"))],
+    );
+    let batch = c.commit().unwrap();
+    assert_eq!(parent(&batch, 10), Some(Some(2)));
+    apply(
+        &mut c,
+        vec![style_op(10, &[("position", StyleValue::Str("relative"))])],
+    );
+    let batch = c.commit().unwrap();
+    assert_eq!(parent(&batch, 10), Some(None));
+}
+
+#[test]
 fn overlays_show_in_their_root_view_above_its_children() {
     use StyleValue::Number;
     let mut c = core();

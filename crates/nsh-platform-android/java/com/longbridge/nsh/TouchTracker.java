@@ -338,6 +338,11 @@ final class TouchTracker {
                 int id = ((Node) v).nodeId();
                 if (node == null) node = v;
                 if (mounter.wants(id, Native.TOUCH)) path.add(id);
+                View parent = mounter.touchParent(id);
+                if (parent != null) {
+                    v = parent;
+                    continue;
+                }
             }
             if (v == root) break;
             ViewParent p = v.getParent();

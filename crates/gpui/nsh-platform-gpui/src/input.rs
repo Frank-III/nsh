@@ -1176,6 +1176,24 @@ fn pick_in(view: &NshView, x: f32, y: f32, items: bool) -> Option<Hit> {
     found.or_else(own)
 }
 
+/// Touch listeners follow an overlay's declaring ancestors.
+fn touch_path(surface: &Surface, view: &NshView) -> Vec<NodeId> {
+    let mut path = Vec::new();
+    let mut current = Some(view.clone());
+    while let Some(view) = current {
+        let s = view.state();
+        if s.events.contains(EventKind::Touch) {
+            path.push(s.id);
+        }
+        current = s
+            .props
+            .touch_parent
+            .and_then(|id| surface.view(id))
+            .or_else(|| view.parent_view());
+    }
+    path
+}
+
 /// `view` and its ancestors, innermost first.
 fn chain(view: &NshView) -> Vec<NshView> {
     let mut out = vec![view.clone()];
@@ -1369,8 +1387,8 @@ fn down(
         );
         grab.add(v, &link, options);
     }
+    let path = touch_path(surface, &hit.view);
     let Grab {
-        path,
         candidates,
         pinch,
         pressed,

@@ -444,6 +444,7 @@ struct Slot {
     pan_scroll: Option<PanScroll>,
     /// `delayLongPress` (milliseconds).
     long_press_delay: Option<f32>,
+    touch_parent: Option<NodeId>,
     /// A horizontal list laid out right to left: mirrored as a whole.
     mirrored: bool,
     /// A cell of such a list: mirrored back.
@@ -504,6 +505,7 @@ impl Slot {
             pan_scroll_handoff: false,
             pan_scroll: None,
             long_press_delay: None,
+            touch_parent: None,
             mirrored: false,
             in_mirrored: false,
             scroll_value: None,
@@ -1963,9 +1965,13 @@ impl Mounter {
                     if s.events.contains(EventKind::Touch) {
                         path.push(id);
                     }
-                    // Screens, header items and modals are not subviews of
-                    // their parent node's view.
-                    match self.hosts.get(&id).and_then(|&p| self.slot(p)) {
+                    // Overlays and hosted screens are mounted outside their
+                    // declaring parent's native view.
+                    match s
+                        .touch_parent
+                        .or_else(|| self.hosts.get(&id).copied())
+                        .and_then(|p| self.slot(p))
+                    {
                         Some(host) => Some(host.native.view().retain()),
                         None => v.superview(),
                     }
@@ -3278,6 +3284,7 @@ impl Mounter {
         let (control, mtm) = (self.control.clone(), self.mtm);
         let Some(s) = self.slot_mut(id) else { return };
         s.long_press_delay = props.long_press_delay;
+        s.touch_parent = props.touch_parent;
         s.pan_scroll_handoff = props.pan_scroll_handoff;
         if let Some(pan) = &s.gestures.pan {
             pan.setMaximumNumberOfTouches(if props.pan_scroll_handoff {

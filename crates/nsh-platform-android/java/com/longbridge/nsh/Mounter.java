@@ -158,6 +158,8 @@ final class Mounter {
     }
     /** Scroll views a JS responder keeps from scrolling. */
     private final java.util.ArrayList<ScrollBox> blockedScrolls = new java.util.ArrayList<>();
+    /** Logical parents of overlays mounted outside their declaring views. */
+    private final android.util.SparseIntArray touchParents = new android.util.SparseIntArray();
     /** `hitSlop` of views that have one (px: top, right, bottom, left). */
     private final SparseArray<float[]> slops = new SparseArray<>();
     private final SparseArray<A11y> a11y = new SparseArray<>();
@@ -861,6 +863,7 @@ final class Mounter {
         events.delete(id);
         eventsHigh.delete(id);
         slops.remove(id);
+        touchParents.delete(id);
         a11y.remove(id);
     }
 
@@ -1398,9 +1401,16 @@ final class Mounter {
         return slops.get(id);
     }
 
+    View touchParent(int id) {
+        return views.get(touchParents.get(id, -1));
+    }
+
     private void viewProps(ByteBuffer b, Object[] objects) {
         int id = b.getInt();
         View v = views.get(id);
+        int touchParent = b.getInt();
+        if (touchParent == -1) touchParents.delete(id);
+        else touchParents.put(id, touchParent);
         int pointerEvents = b.getInt();
         float[] slop = {b.getFloat() * density, b.getFloat() * density, b.getFloat() * density, b.getFloat() * density};
         A11y a = new A11y(this, id);

@@ -740,6 +740,9 @@ fn props_json(p: &ViewProps) -> String {
         "\"pointerEvents\":{}",
         json_str(enum_name(&p.pointer_events))
     );
+    if let Some(parent) = p.touch_parent {
+        let _ = write!(s, ",\"touchParent\":{parent}");
+    }
     let h = p.hit_slop;
     let _ = write!(
         s,

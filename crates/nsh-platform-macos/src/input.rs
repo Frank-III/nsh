@@ -1078,6 +1078,28 @@ fn unproject(m: &nsh_core::Matrix, p: (f32, f32)) -> Option<(f32, f32)> {
     Some(((lx / w) as f32, (ly / w) as f32))
 }
 
+/// Touch listeners follow an overlay's declaring ancestors.
+fn touch_path(surface: &Surface, view: &NshView) -> Vec<NodeId> {
+    let mut path = Vec::new();
+    let mut current = Some(view.clone());
+    while let Some(view) = current {
+        let s = view.state();
+        if s.events.contains(EventKind::Touch) {
+            path.push(s.id);
+        }
+        current = s
+            .props
+            .touch_parent
+            // Mid-apply, the mounter is borrowed: native ancestry then.
+            .and_then(|id| {
+                let mounter = surface.mounter.try_borrow().ok()?;
+                mounter.views.get(&id).cloned()
+            })
+            .or_else(|| view.parent_view());
+    }
+    path
+}
+
 /// `view` and its ancestors, innermost first.
 fn chain(view: &NshView) -> Vec<NshView> {
     let mut out = vec![view.clone()];
@@ -1192,15 +1214,12 @@ fn down(
         put(surface, p);
         return;
     }
-    let mut path = Vec::new();
+    let path = touch_path(surface, &hit.view);
     let mut candidates = Vec::new();
     let mut pressed = Vec::new();
     let mut gate = None;
     for v in &views {
         let s = v.state();
-        if s.events.contains(EventKind::Touch) {
-            path.push(s.id);
-        }
         if s.tracked & PRESSED != 0 {
             pressed.push(v.clone());
         }
