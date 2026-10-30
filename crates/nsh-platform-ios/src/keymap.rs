@@ -25,7 +25,8 @@
 //! otherwise, the US layout's of the same key when that is no ASCII, as on
 //! the desktops. UIKit sends a held key's press once: a binding that
 //! repeats (`repeat: true`) fires again on a timer of its own while the key
-//! is held, at the system's usual pace. Fallback navigation keys use priority
+//! is held, at the system's usual pace. With no input focused, navigation
+//! keys, and on iOS 16 and later unshifted letters and digits, use priority
 //! UIKeyCommands instead: one dispatch per action, with no release timer.
 
 use std::{
@@ -156,7 +157,7 @@ pub(crate) fn began(
         let Some(stroke) = keystroke(&key) else {
             continue;
         };
-        if priority && command_input(stroke.key).is_some() {
+        if priority && command_input(stroke).is_some() {
             continue;
         }
         let Some(table) = state.table.borrow().clone() else {
@@ -309,12 +310,22 @@ pub(crate) fn root_began(target: &EventTarget, presses: &AnyObject, priority: bo
     began(target, presses, editing, priority)
 }
 
-/// UIKit's focus navigation keys need priority commands on iPadOS.
-fn command_input(key: Key) -> Option<Retained<NSString>> {
+/// The keystrokes the fallback responder vends as priority commands: UIKit's
+/// focus navigation keys, which iPadOS takes otherwise, and letters and
+/// digits, which UIKit matches even when a hardware press reaches
+/// `pressesBegan` without its characters. Shifted characters stay with
+/// `pressesBegan`, and so do letters before iOS 16, whose commands repeat
+/// while held whatever the binding says.
+fn command_input(stroke: Keystroke) -> Option<Retained<NSString>> {
     use objc2_ui_kit::*;
-    // SAFETY: UIKit's exported immutable NSString constants.
+    // SAFETY: UIKit's exported immutable NSString constants, or a new string.
     Some(unsafe {
-        match key {
+        match stroke.key {
+            Key::Char(c)
+                if c.is_ascii_alphanumeric() && !stroke.modifiers.shift && repeat_settable() =>
+            {
+                NSString::from_str(c.encode_utf8(&mut [0; 4]))
+            }
             Key::Up => UIKeyInputUpArrow.retain(),
             Key::Down => UIKeyInputDownArrow.retain(),
             Key::Left => UIKeyInputLeftArrow.retain(),
@@ -328,6 +339,17 @@ fn command_input(key: Key) -> Option<Retained<NSString>> {
             _ => return None,
         }
     })
+}
+
+/// Whether a UIKeyCommand's repeat behavior can be set (iOS 16).
+fn repeat_settable() -> bool {
+    // SAFETY: NSObject's class method, on UIKit's class.
+    unsafe {
+        msg_send![
+            AnyClass::get(c"UIKeyCommand").expect("UIKeyCommand"),
+            instancesRespondToSelector: sel!(setRepeatBehavior:)
+        ]
+    }
 }
 
 fn command_flags(modifiers: Modifiers) -> isize {
@@ -355,9 +377,13 @@ pub(crate) fn commands(
         {
             continue;
         }
-        let Some(input) = command_input(stroke.key) else {
+        let Some(input) = command_input(stroke) else {
             continue;
         };
+        // The dev host's Cmd+R reloads, whatever the app binds.
+        if cfg!(feature = "dev") && stroke.reloads(nsh_core::platform::Os::Ios) {
+            continue;
+        }
         strokes.push(stroke);
         // SAFETY: same UIKeyCommand factory and priority setter as input.rs.
         let command: Retained<AnyObject> = unsafe {
@@ -368,6 +394,17 @@ pub(crate) fn commands(
                 action: sel!(nshKeyCommand:)
             ];
             let _: () = msg_send![&command, setWantsPriorityOverSystemBehavior: true];
+            // A held key repeats only if the binding it fires repeats
+            // (iOS 16's `UIMenuElementRepeatBehaviorRepeatable` /
+            // `NonRepeatable`).
+            let repeats = match table.find(stroke, false, false) {
+                KeyMatch::Fire(id) => table.bindings().iter().any(|b| b.id == id && b.repeat),
+                _ => false,
+            };
+            if repeat_settable() {
+                let _: () =
+                    msg_send![&command, setRepeatBehavior: if repeats { 1isize } else { 2isize }];
+            }
             command
         };
         commands.push(command);
@@ -389,7 +426,7 @@ pub(crate) fn command(view: &UIView, target: &EventTarget, sender: &AnyObject) {
         return;
     };
     let stroke = table.bindings().iter().map(|b| b.keystroke).find(|s| {
-        command_flags(s.modifiers) == flags && command_input(s.key).is_some_and(|s| s == input)
+        command_flags(s.modifiers) == flags && command_input(*s).is_some_and(|s| s == input)
     });
     if let Some(stroke) = stroke
         && let KeyMatch::Fire(id) = table.find(stroke, false, false)
