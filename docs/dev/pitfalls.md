@@ -325,7 +325,8 @@ Things that were found the hard way. Read the section of the area you change bef
 - **Android, safe area**: `NshView` reports only the parts of the system bars / keyboard that overlap it (like UIKit's
   `safeAreaInsets`), so embedded views below a toolbar get no top inset. Overlays use the same overlap (`topInset()`).
 - **Android, dev assets come over plain HTTP**, which apps block by default (API 28+): the dev host APK and `nsh-dev.aar` set
-  `usesCleartextTraffic`; the release AAR does not.
+  `usesCleartextTraffic`; the release AAR does not, and release APKs get it only with `nsh.json`
+  `android.cleartextTraffic`.
 - **Android, activities**: create the decor view (`getDecorView()`) before asking for the insets controller; apps draw edge to edge
   and get the system bars through `safeArea()`.
 - **Android, the back key without `OnBackInvokedCallback`** (below 13, or `enableOnBackInvokedCallback` off): the window
