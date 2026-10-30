@@ -133,7 +133,7 @@ impl Default for AppOptions {
             asset_base: None,
             app_id: "com.longbridge.nsh.host".to_owned(),
             title: "nsh".to_owned(),
-            size: (390, 844),
+            size: (1200, 800),
             components: Default::default(),
             appearance: Appearance::System,
             limits: Limits::default(),
