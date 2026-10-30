@@ -12,7 +12,10 @@
 //! typed character. Presses nothing handled reach the surface's root view
 //! (`surface::RootView`), which matches them as the desktops do when the
 //! focus is on none of the app's inputs: a press from a hosted view (a web
-//! view, a native component) counts as in text.
+//! view, a native component) counts as in text. The root and navigation
+//! controllers' content roots become first responder only while no control
+//! owns the keyboard. Window attachment, detachment and editing-end
+//! notifications restore that fallback after UIKit completes a focus transfer.
 //!
 //! A key that fires a binding is consumed until it is released (its
 //! release is consumed too) and reported to JS with the root's
@@ -22,7 +25,9 @@
 //! otherwise, the US layout's of the same key when that is no ASCII, as on
 //! the desktops. UIKit sends a held key's press once: a binding that
 //! repeats (`repeat: true`) fires again on a timer of its own while the key
-//! is held, at the system's usual pace.
+//! is held, at the system's usual pace. With no input focused, navigation
+//! keys, and on iOS 16 and later unshifted letters and digits, use priority
+//! UIKeyCommands instead: one dispatch per action, with no release timer.
 
 use std::{
     cell::{Cell, RefCell},
@@ -34,9 +39,14 @@ use nsh_core::{
     EventKind, EventPayload, PayloadValue, ROOT_ID,
     keymap::{Key, KeyMatch, Keymap, Keystroke, Modifiers},
 };
-use objc2::{MainThreadMarker, msg_send, rc::Retained, runtime::AnyObject};
-use objc2_foundation::{NSArray, NSString};
-use objc2_ui_kit::UIView;
+use objc2::{
+    DefinedClass, MainThreadMarker, MainThreadOnly, Message, define_class, msg_send,
+    rc::{Retained, Weak},
+    runtime::{AnyClass, AnyObject},
+    sel,
+};
+use objc2_foundation::{NSArray, NSObject, NSString};
+use objc2_ui_kit::{UIResponder, UIView, UIViewControllerTransitionCoordinator, UIWindow};
 
 use crate::target::EventTarget;
 
@@ -127,7 +137,12 @@ fn keystroke(key: &AnyObject) -> Option<Keystroke> {
 /// `pressesBegan:withEvent:` of a responder of the surface: whether the
 /// table consumed `presses` (then the responder neither handles them nor
 /// passes them on). `editing`: a text input or hosted view has the focus.
-pub(crate) fn began(target: &EventTarget, presses: &AnyObject, editing: bool) -> bool {
+pub(crate) fn began(
+    target: &EventTarget,
+    presses: &AnyObject,
+    editing: bool,
+    priority: bool,
+) -> bool {
     let state = target.keymap();
     if !state.active() {
         return false;
@@ -142,6 +157,9 @@ pub(crate) fn began(target: &EventTarget, presses: &AnyObject, editing: bool) ->
         let Some(stroke) = keystroke(&key) else {
             continue;
         };
+        if priority && command_input(stroke).is_some() {
+            continue;
+        }
         let Some(table) = state.table.borrow().clone() else {
             continue;
         };
@@ -245,7 +263,7 @@ pub(crate) fn input_began(view: &UIView, presses: &AnyObject) -> bool {
     if crate::input::marked_text(view).is_some() {
         return false;
     }
-    input_target(view).is_some_and(|target| began(&target, presses, true))
+    input_target(view).is_some_and(|target| began(&target, presses, true, false))
 }
 
 /// `pressesEnded:` / `pressesCancelled:` of text input `view`.
@@ -258,7 +276,7 @@ pub(crate) fn input_ended(view: &UIView, presses: &AnyObject) -> bool {
 /// them. The app's text inputs matched theirs already; a press from
 /// another view taking text (a web view's, a native component's) is in
 /// text.
-pub(crate) fn root_began(target: &EventTarget, presses: &AnyObject) -> bool {
+pub(crate) fn root_began(target: &EventTarget, presses: &AnyObject, priority: bool) -> bool {
     use objc2::ProtocolType;
     // SAFETY: as in `keys`; `responder` is UIPress's.
     let responder: Option<Retained<AnyObject>> = unsafe {
@@ -284,5 +302,299 @@ pub(crate) fn root_began(target: &EventTarget, presses: &AnyObject) -> bool {
         }
         None => false,
     };
-    began(target, presses, editing)
+    let priority = priority
+        || responder
+            .as_deref()
+            .and_then(|r| r.downcast_ref::<UIView>())
+            .is_some_and(is_fallback);
+    began(target, presses, editing, priority)
+}
+
+/// The keystrokes the fallback responder vends as priority commands: UIKit's
+/// focus navigation keys, which iPadOS takes otherwise, and letters and
+/// digits, which UIKit matches even when a hardware press reaches
+/// `pressesBegan` without its characters. Shifted characters stay with
+/// `pressesBegan`, and so do letters before iOS 16, whose commands repeat
+/// while held whatever the binding says.
+fn command_input(stroke: Keystroke) -> Option<Retained<NSString>> {
+    use objc2_ui_kit::*;
+    // SAFETY: UIKit's exported immutable NSString constants, or a new string.
+    Some(unsafe {
+        match stroke.key {
+            Key::Char(c)
+                if c.is_ascii_alphanumeric() && !stroke.modifiers.shift && repeat_settable() =>
+            {
+                NSString::from_str(c.encode_utf8(&mut [0; 4]))
+            }
+            Key::Up => UIKeyInputUpArrow.retain(),
+            Key::Down => UIKeyInputDownArrow.retain(),
+            Key::Left => UIKeyInputLeftArrow.retain(),
+            Key::Right => UIKeyInputRightArrow.retain(),
+            Key::Escape => UIKeyInputEscape.retain(),
+            Key::Home => UIKeyInputHome.retain(),
+            Key::End => UIKeyInputEnd.retain(),
+            Key::PageUp => UIKeyInputPageUp.retain(),
+            Key::PageDown => UIKeyInputPageDown.retain(),
+            Key::Tab => NSString::from_str("\t"),
+            _ => return None,
+        }
+    })
+}
+
+/// Whether a UIKeyCommand's repeat behavior can be set (iOS 16).
+fn repeat_settable() -> bool {
+    // SAFETY: NSObject's class method, on UIKit's class.
+    unsafe {
+        msg_send![
+            AnyClass::get(c"UIKeyCommand").expect("UIKeyCommand"),
+            instancesRespondToSelector: sel!(setRepeatBehavior:)
+        ]
+    }
+}
+
+fn command_flags(modifiers: Modifiers) -> isize {
+    (if modifiers.shift { SHIFT } else { 0 })
+        | (if modifiers.ctrl { CONTROL } else { 0 })
+        | (if modifiers.alt { ALTERNATE } else { 0 })
+        | (if modifiers.cmd { COMMAND } else { 0 })
+}
+
+pub(crate) fn commands(
+    view: &UIView,
+    target: &EventTarget,
+    modal: bool,
+) -> Option<Retained<NSArray<AnyObject>>> {
+    if !view.isFirstResponder() {
+        return None;
+    }
+    let table = target.keymap().table.borrow().clone()?;
+    let mut strokes = Vec::new();
+    let mut commands = Vec::new();
+    for binding in table.bindings() {
+        let stroke = binding.keystroke;
+        if strokes.contains(&stroke)
+            || (modal && stroke.key == Key::Escape && stroke.modifiers == Modifiers::default())
+        {
+            continue;
+        }
+        let Some(input) = command_input(stroke) else {
+            continue;
+        };
+        // The dev host's Cmd+R reloads, whatever the app binds.
+        if cfg!(feature = "dev") && stroke.reloads(nsh_core::platform::Os::Ios) {
+            continue;
+        }
+        strokes.push(stroke);
+        // SAFETY: same UIKeyCommand factory and priority setter as input.rs.
+        let command: Retained<AnyObject> = unsafe {
+            let command: Retained<AnyObject> = msg_send![
+                AnyClass::get(c"UIKeyCommand").expect("UIKeyCommand"),
+                keyCommandWithInput: &*input,
+                modifierFlags: command_flags(stroke.modifiers),
+                action: sel!(nshKeyCommand:)
+            ];
+            let _: () = msg_send![&command, setWantsPriorityOverSystemBehavior: true];
+            // A held key repeats only if the binding it fires repeats
+            // (iOS 16's `UIMenuElementRepeatBehaviorRepeatable` /
+            // `NonRepeatable`).
+            let repeats = match table.find(stroke, false, false) {
+                KeyMatch::Fire(id) => table.bindings().iter().any(|b| b.id == id && b.repeat),
+                _ => false,
+            };
+            if repeat_settable() {
+                let _: () =
+                    msg_send![&command, setRepeatBehavior: if repeats { 1isize } else { 2isize }];
+            }
+            command
+        };
+        commands.push(command);
+    }
+    Some(NSArray::from_retained_slice(&commands))
+}
+
+pub(crate) fn command(view: &UIView, target: &EventTarget, sender: &AnyObject) {
+    if !view.isFirstResponder() {
+        return;
+    }
+    // SAFETY: the action's sender is a UIKeyCommand.
+    let (input, flags): (Option<Retained<NSString>>, isize) =
+        unsafe { (msg_send![sender, input], msg_send![sender, modifierFlags]) };
+    let Some(input) = input else {
+        return;
+    };
+    let Some(table) = target.keymap().table.borrow().clone() else {
+        return;
+    };
+    let stroke = table.bindings().iter().map(|b| b.keystroke).find(|s| {
+        command_flags(s.modifiers) == flags && command_input(*s).is_some_and(|s| s == input)
+    });
+    if let Some(stroke) = stroke
+        && let KeyMatch::Fire(id) = table.find(stroke, false, false)
+    {
+        // Commands have no paired release. Never start a held-key timer here.
+        fire(target, id);
+    }
+}
+
+/// A navigation controller's content root, outside the surface's responder chain.
+pub(crate) struct CommandViewIvars {
+    target: Retained<EventTarget>,
+    window: RefCell<Option<Weak<UIWindow>>>,
+    modal: bool,
+}
+
+define_class!(
+    #[unsafe(super(UIView, UIResponder, NSObject))]
+    #[thread_kind = MainThreadOnly]
+    #[ivars = CommandViewIvars]
+    pub(crate) struct CommandView;
+
+    impl CommandView {
+        #[unsafe(method_id(keyCommands))]
+        fn key_commands(&self) -> Option<Retained<NSArray<AnyObject>>> {
+            commands(self, &self.ivars().target, self.ivars().modal)
+        }
+
+        #[unsafe(method(nshKeyCommand:))]
+        fn key_command(&self, sender: &AnyObject) {
+            command(self, &self.ivars().target, sender);
+        }
+
+        #[unsafe(method(canBecomeFirstResponder))]
+        fn can_become_first_responder(&self) -> bool { true }
+
+        #[unsafe(method(didMoveToWindow))]
+        fn did_move_to_window(&self) {
+            // SAFETY: calling the superclass implementation.
+            let _: () = unsafe { msg_send![super(self), didMoveToWindow] };
+            let window = self.window();
+            let old = self.ivars().window.replace(window.as_ref().map(Weak::from_retained));
+            if let Some(window) = window.or_else(|| old.and_then(|w| w.load())) {
+                restore(&window);
+            }
+        }
+
+        #[unsafe(method(pressesBegan:withEvent:))]
+        fn presses_began(&self, presses: &AnyObject, event: Option<&AnyObject>) {
+            // ModalController's UIKeyCommand owns unmodified Escape.
+            let escape = self.ivars().modal && keys(presses).iter().any(|key| {
+                keystroke(key).is_some_and(|s| s.key == Key::Escape && s.modifiers == Modifiers::default())
+            });
+            if escape || !root_began(&self.ivars().target, presses, self.isFirstResponder()) {
+                // SAFETY: calling the superclass implementation.
+                let _: () = unsafe { msg_send![super(self), pressesBegan: presses, withEvent: event] };
+            }
+        }
+
+        #[unsafe(method(pressesEnded:withEvent:))]
+        fn presses_ended(&self, presses: &AnyObject, event: Option<&AnyObject>) {
+            if !ended(&self.ivars().target, presses) {
+                // SAFETY: calling the superclass implementation.
+                let _: () = unsafe { msg_send![super(self), pressesEnded: presses, withEvent: event] };
+            }
+        }
+
+        #[unsafe(method(pressesCancelled:withEvent:))]
+        fn presses_cancelled(&self, presses: &AnyObject, event: Option<&AnyObject>) {
+            if !ended(&self.ivars().target, presses) {
+                // SAFETY: calling the superclass implementation.
+                let _: () = unsafe { msg_send![super(self), pressesCancelled: presses, withEvent: event] };
+            }
+        }
+    }
+);
+
+impl CommandView {
+    pub(crate) fn new(target: &EventTarget, modal: bool) -> Retained<Self> {
+        let this = Self::alloc(MainThreadMarker::from(target)).set_ivars(CommandViewIvars {
+            target: target.retain(),
+            window: RefCell::new(None),
+            modal,
+        });
+        // SAFETY: UIView's designated initializer.
+        unsafe { msg_send![super(this), initWithFrame: objc2_core_foundation::CGRect::ZERO] }
+    }
+}
+
+/// Restore only an empty keyboard focus, after UIKit finishes transferring it.
+/// A fallback responder takes no text and does not request accessibility focus.
+pub(crate) fn restore(window: &UIWindow) {
+    restore_after(window, Duration::ZERO);
+    // Editing-end can precede UIKit releasing the hardware keyboard focus.
+    restore_after(window, Duration::from_millis(100));
+}
+
+fn restore_after(window: &UIWindow, delay: Duration) {
+    let window =
+        dispatch2::MainThreadBound::new(Weak::from(window), MainThreadMarker::from(window));
+    let when = dispatch2::DispatchTime::NOW.time(delay.as_nanos() as i64);
+    dispatch2::DispatchQueue::main()
+        .after(when, move || {
+            let mtm = MainThreadMarker::new().expect("main queue");
+            let Some(window) = window.into_inner(mtm).load() else {
+                return;
+            };
+            fn occupied(view: &UIView) -> bool {
+                (view.isFirstResponder() && !is_fallback(view))
+                    || view.nextResponder().is_some_and(|r| {
+                        r.isFirstResponder()
+                            && r.downcast_ref::<UIView>().is_none_or(|v| !is_fallback(v))
+                    })
+                    || view.subviews().iter().any(|v| occupied(&v))
+            }
+            fn candidate(view: &UIView) -> Option<Retained<UIView>> {
+                if view.window().is_none() || view.isHidden() || view.alpha() == 0.0 {
+                    return None;
+                }
+                view.subviews()
+                    .to_vec()
+                    .iter()
+                    .rev()
+                    .find_map(|v| candidate(v))
+                    .or_else(|| is_fallback(view).then(|| view.retain()))
+            }
+            let Some(mut controller) = window.rootViewController() else {
+                return;
+            };
+            while let Some(presented) = controller.presentedViewController() {
+                controller = presented;
+            }
+            if delay.is_zero()
+                && let Some(coordinator) = controller.transitionCoordinator()
+            {
+                let weak = Weak::from_retained(&window);
+                let block = block2::RcBlock::new(
+                    move |_context: std::ptr::NonNull<
+                        objc2::runtime::ProtocolObject<
+                            dyn objc2_ui_kit::UIViewControllerTransitionCoordinatorContext,
+                        >,
+                    >| {
+                        if let Some(window) = weak.load() {
+                            restore_after(&window, Duration::from_millis(1));
+                        }
+                    },
+                );
+                coordinator.animateAlongsideTransition_completion(None, Some(&block));
+            }
+            if occupied(&window) {
+                return;
+            }
+            if !controller.isBeingDismissed()
+                && let Some(view) = controller.view().and_then(|v| candidate(&v))
+                && !view.isFirstResponder()
+                && !view.becomeFirstResponder()
+            {
+                log::debug!(
+                    "keyboard fallback could not become first responder: {:?}",
+                    view
+                );
+            }
+        })
+        .ok();
+}
+
+/// A responder that takes keys only while no control needs the keyboard.
+pub(crate) fn is_fallback(view: &UIView) -> bool {
+    view.downcast_ref::<CommandView>().is_some()
+        || view.downcast_ref::<crate::surface::RootView>().is_some()
 }

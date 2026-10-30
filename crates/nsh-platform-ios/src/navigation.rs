@@ -99,6 +99,15 @@ define_class!(
     pub(crate) struct ScreenController;
 
     impl ScreenController {
+        #[unsafe(method(viewDidAppear:))]
+        fn view_did_appear(&self, animated: bool) {
+            // SAFETY: calling the superclass implementation.
+            let _: () = unsafe { msg_send![super(self), viewDidAppear: animated] };
+            if let Some(window) = self.view().and_then(|v| v.window()) {
+                crate::keymap::restore(&window);
+            }
+        }
+
         #[unsafe(method(viewDidLayoutSubviews))]
         fn view_did_layout_subviews(&self) {
             // SAFETY: calling the superclass implementation.
@@ -185,7 +194,7 @@ impl ScreenController {
 }
 
 fn first_responder(view: &UIView) -> Option<Retained<UIView>> {
-    if view.isFirstResponder() {
+    if view.isFirstResponder() && !crate::keymap::is_fallback(view) {
         return Some(view.retain());
     }
     view.subviews()
@@ -231,6 +240,9 @@ define_class!(
         fn view_did_appear(&self, animated: bool) {
             // SAFETY: calling the superclass implementation.
             let _: () = unsafe { msg_send![super(self), viewDidAppear: animated] };
+            if let Some(window) = self.view().and_then(|v| v.window()) {
+                crate::keymap::restore(&window);
+            }
             let id = self.ivars().id;
             self.ivars().control.dispatch_event(id, EventKind::Show, EventPayload::None);
         }
@@ -296,7 +308,10 @@ define_class!(
 
         /// The user swiped a `closeOnSwipe` sheet away.
         #[unsafe(method(presentationControllerDidDismiss:))]
-        fn did_dismiss(&self, _controller: &UIPresentationController) {
+        fn did_dismiss(&self, controller: &UIPresentationController) {
+            if let Some(window) = controller.presentingViewController().view().and_then(|v| v.window()) {
+                crate::keymap::restore(&window);
+            }
             let ivars = self.ivars();
             ivars.closed.set(true);
             ivars
@@ -364,7 +379,11 @@ impl ModalController {
             return;
         }
         ivars.closed.set(true);
+        let window = self.view().and_then(|v| v.window());
         let block = block2::RcBlock::new(move || {
+            if let Some(window) = &window {
+                crate::keymap::restore(window);
+            }
             control.dispatch_event(id, EventKind::Dismiss, EventPayload::None);
         });
         self.dismissViewControllerAnimated_completion(ivars.animated.get(), Some(&block));
@@ -1056,8 +1075,14 @@ pub(crate) struct ScreenHost {
 }
 
 impl ScreenHost {
-    pub(crate) fn new(mtm: MainThreadMarker, id: NodeId, control: EngineControl) -> Self {
+    pub(crate) fn new(
+        mtm: MainThreadMarker,
+        id: NodeId,
+        control: EngineControl,
+        target: &crate::target::EventTarget,
+    ) -> Self {
         let controller = ScreenController::new(mtm, id, control);
+        controller.setView(Some(&crate::keymap::CommandView::new(target, false)));
         let view = NshView::new(mtm);
         if let Some(root) = controller.view() {
             root.setBackgroundColor(Some(&UIColor::systemBackgroundColor()));
@@ -1246,8 +1271,14 @@ pub(crate) struct ModalHost {
 }
 
 impl ModalHost {
-    pub(crate) fn new(mtm: MainThreadMarker, id: NodeId, control: EngineControl) -> Self {
+    pub(crate) fn new(
+        mtm: MainThreadMarker,
+        id: NodeId,
+        control: EngineControl,
+        target: &crate::target::EventTarget,
+    ) -> Self {
         let controller = ModalController::new(mtm, id, control);
+        controller.setView(Some(&crate::keymap::CommandView::new(target, true)));
         let view = NshView::new(mtm);
         if let Some(root) = controller.view() {
             root.addSubview(&view);
@@ -1361,7 +1392,13 @@ impl ModalHost {
         if self.controller.ivars().closed.replace(false) {
             return;
         }
-        let block = block2::RcBlock::new(done);
+        let window = self.controller.view().and_then(|v| v.window());
+        let block = block2::RcBlock::new(move || {
+            if let Some(window) = &window {
+                crate::keymap::restore(window);
+            }
+            done();
+        });
         let animated = self.config.animation != ModalAnimation::None;
         // Through the presenter: a modal that presents another one (a sheet
         // over it) would otherwise only dismiss that one, and stay on

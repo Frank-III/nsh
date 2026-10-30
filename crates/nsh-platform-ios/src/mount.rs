@@ -900,10 +900,14 @@ impl Mounter {
                         self.mtm,
                         id,
                         self.control.clone(),
+                        &self.target,
                     ))),
-                    ViewKind::Modal => {
-                        Native::Modal(Box::new(ModalHost::new(self.mtm, id, self.control.clone())))
-                    }
+                    ViewKind::Modal => Native::Modal(Box::new(ModalHost::new(
+                        self.mtm,
+                        id,
+                        self.control.clone(),
+                        &self.target,
+                    ))),
                     ViewKind::HeaderItem => Native::HeaderItem(NshView::new(self.mtm)),
                     ViewKind::InputAccessory => Native::InputAccessory(NshView::new(self.mtm)),
                     ViewKind::Canvas => Native::Canvas(crate::canvas::CanvasView::new(self.mtm)),
