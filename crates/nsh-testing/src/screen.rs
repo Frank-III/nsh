@@ -170,6 +170,7 @@ pub struct Screen {
 struct View {
     kind: Option<ViewKind>,
     parent: Option<NodeId>,
+    touch_parent: Option<NodeId>,
     events: EventMask,
     test_id: Option<Arc<str>>,
     label: Option<Arc<str>>,
@@ -382,6 +383,7 @@ impl Screen {
             MountItem::Events { id, events } => self.nodes.entry(*id).or_default().events = *events,
             MountItem::ViewProps { id, props } => {
                 let view = self.nodes.entry(*id).or_default();
+                view.touch_parent = props.touch_parent;
                 view.test_id = props.test_id.clone();
                 view.label = props.accessibility.label.clone();
                 view.role = props.accessibility.role;
@@ -1530,7 +1532,11 @@ impl Screen {
             if self.hears(id, EventKind::Touch) {
                 path.push(id);
             }
-            match self.nodes.get(&id).and_then(|v| v.parent) {
+            match self
+                .nodes
+                .get(&id)
+                .and_then(|v| v.touch_parent.or(v.parent))
+            {
                 Some(parent) => id = parent,
                 None => return path,
             }

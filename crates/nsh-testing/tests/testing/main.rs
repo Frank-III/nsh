@@ -308,3 +308,14 @@ fn expect_compares_values_as_jest_does() {
     assert!(failed.is_empty(), "{failed:#?}");
     assert_eq!(results.len(), 8);
 }
+
+#[test]
+fn overlay_touches_follow_declaring_ancestors() {
+    let file = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../examples/gallery/tests/overlay-touch.test.tsx");
+    let results = run_file(&test_run(None), &file, &mut |_| {}).unwrap();
+    assert!(!results.is_empty());
+    for result in results {
+        assert!(result.failure.is_none(), "{result:?}");
+    }
+}

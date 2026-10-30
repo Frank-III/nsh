@@ -228,6 +228,12 @@ impl<M: TextEngine> Core<M> {
         self.roots.retain(|&k| k != key);
         let node = &mut self.nodes[key as usize];
         node.fixed_view = false;
+        if let Some(props) = node.props.as_mut()
+            && props.touch_parent.take().is_some()
+        {
+            self.mark(key, super::dirty::VIEW_PROPS);
+        }
+        let node = &mut self.nodes[key as usize];
         node.root = None;
         if let Some(base) = node.base_layout.as_deref() {
             self.layout.set_style(layout, base.clone());
@@ -378,6 +384,17 @@ impl<M: TextEngine> Core<M> {
         // The hints in the view, whose anchors listen to the pointer.
         let mut hints = Vec::new();
         for (_, key) in order {
+            // Skip nodes without native views, as the normal mount path does.
+            let mut parent = self.nodes[key as usize].parent;
+            while parent != NO_KEY && !self.nodes[parent as usize].created {
+                parent = self.nodes[parent as usize].parent;
+            }
+            let touch_parent = (parent != NO_KEY).then(|| self.nodes[parent as usize].id);
+            let node = &mut self.nodes[key as usize];
+            if node.props.as_ref().and_then(|p| p.touch_parent) != touch_parent {
+                node.props.get_or_insert_default().touch_parent = touch_parent;
+                self.mark(key, super::dirty::VIEW_PROPS);
+            }
             let mut target = self.overlay_host(key);
             let Some(state) = self.overlay(key) else {
                 continue;

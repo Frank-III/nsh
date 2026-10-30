@@ -1009,6 +1009,7 @@ fn screen_config(e: &mut Encoded, c: &ScreenConfig) {
 }
 
 fn view_props(e: &mut Encoded, p: &ViewProps) {
+    e.int(p.touch_parent.map_or(-1, |id| id as i32));
     e.int(match p.pointer_events {
         PointerEvents::Auto => 0,
         PointerEvents::None => 1,

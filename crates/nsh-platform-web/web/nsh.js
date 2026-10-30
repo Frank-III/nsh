@@ -5191,6 +5191,15 @@ class Player {
     return el && el._id !== undefined ? el : null;
   }
 
+  touchPath(el) {
+    const path = [];
+    for (let e = el; e && e !== this.root.parentNode;
+      e = (e._props?.touchParent != null ? this.view(e._props.touchParent) : null) ?? e.parentNode) {
+      if (e._events?.has("onTouch")) path.push(e._id);
+    }
+    return path;
+  }
+
   ancestors(el) {
     const out = [];
     for (let e = el; e && e !== this.root.parentNode; e = e.parentNode) if (e._id !== undefined) out.push(e);
@@ -5865,7 +5874,7 @@ class Player {
     const scrollView = isField ? null : chain.find((v) => v._kind === "scroll") ?? null;
     const p = {
       x, y, layer, startX: x, startY: y, t: performance.now(), vx: 0, vy: 0,
-      touchPath: chain.filter((v) => v._events.has("onTouch")).map((v) => v._id),
+      touchPath: this.touchPath(target),
       press: isField ? null : this.linkPress(e.target, target) ?? chain.find((v) => PRESS_EVENTS.some((n) => v._events.has(n)) && !v._props?.disabled) ?? null,
       // What presses report: the modifier keys at the press and its clicks.
       modifiers: { control: e.ctrlKey, alt: e.altKey, shift: e.shiftKey, platform: e.metaKey },

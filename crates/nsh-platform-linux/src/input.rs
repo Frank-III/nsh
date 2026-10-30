@@ -898,6 +898,28 @@ fn hit(view: &NshView, native: Option<gtk::Widget>) -> Hit {
     }
 }
 
+/// Touch listeners follow an overlay's declaring ancestors.
+fn touch_path(surface: &Surface, view: &NshView) -> Vec<NodeId> {
+    let mut path = Vec::new();
+    let mut current = Some(view.clone());
+    while let Some(view) = current {
+        let s = view.state();
+        if s.events.contains(EventKind::Touch) {
+            path.push(s.id);
+        }
+        current = s
+            .props
+            .touch_parent
+            // Mid-apply, the mounter is borrowed: native ancestry then.
+            .and_then(|id| {
+                let mounter = surface.mounter.try_borrow().ok()?;
+                mounter.views.get(&id).cloned()
+            })
+            .or_else(|| view.parent_view());
+    }
+    path
+}
+
 /// `view` and its ancestors, innermost first.
 fn chain(view: &NshView) -> Vec<NshView> {
     let mut out = vec![view.clone()];
@@ -1016,8 +1038,8 @@ fn down(surface: &Rc<Surface>, key: Key, x: f32, y: f32, time: f64, modifiers: g
         );
         grab.add(v, &link, options);
     }
+    let path = touch_path(surface, &hit.view);
     let Grab {
-        path,
         candidates,
         pinch,
         pressed,
