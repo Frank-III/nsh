@@ -2090,6 +2090,7 @@ final class Mounter {
                 break;
             }
             case 18: {
+                if (v instanceof InputBox) v = ((InputBox) v).edit;
                 if (v != null) {
                     v.performAccessibilityAction(android.view.accessibility.AccessibilityNodeInfo.ACTION_ACCESSIBILITY_FOCUS, null);
                 }

@@ -3,8 +3,10 @@ package com.longbridge.nsh;
 import android.os.Build;
 import android.os.Bundle;
 import android.view.View;
+import android.view.accessibility.AccessibilityEvent;
 import android.view.accessibility.AccessibilityNodeInfo;
 import android.view.accessibility.AccessibilityNodeInfo.AccessibilityAction;
+import android.widget.EditText;
 
 /**
  * Accessibility of one view, from the app's properties
@@ -63,6 +65,12 @@ final class A11y extends View.AccessibilityDelegate {
 
     /** Applies the view-level settings (the rest happens per query). */
     void apply(View v) {
+        if (v instanceof InputBox) {
+            // The decoration is not a second control; hiding it hides the editor too.
+            v.setImportantForAccessibility(hidden ? View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS
+                    : View.IMPORTANT_FOR_ACCESSIBILITY_NO);
+            v = ((InputBox) v).edit;
+        }
         v.setAccessibilityDelegate(this);
         if (hidden) {
             v.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS);
@@ -74,10 +82,12 @@ final class A11y extends View.AccessibilityDelegate {
             v.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_AUTO);
         }
         if (Build.VERSION.SDK_INT >= 28) v.setScreenReaderFocusable(accessible == 1);
-        v.setContentDescription(label);
+        v.setContentDescription(v instanceof EditText ? null : label);
         v.setAccessibilityLiveRegion(liveRegion == 2 ? View.ACCESSIBILITY_LIVE_REGION_ASSERTIVE
                 : liveRegion == 1 ? View.ACCESSIBILITY_LIVE_REGION_POLITE : View.ACCESSIBILITY_LIVE_REGION_NONE);
         if (Build.VERSION.SDK_INT >= 28) v.setAccessibilityHeading(role == ROLE_HEADER);
+        // Hint-only label changes do not go through setContentDescription's notification.
+        if (v instanceof EditText) v.sendAccessibilityEvent(AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED);
     }
 
     @Override
@@ -89,7 +99,22 @@ final class A11y extends View.AccessibilityDelegate {
         if (description != null && Build.VERSION.SDK_INT >= 30) {
             info.getExtras().putCharSequence("AccessibilityNodeInfo.roleDescription", description);
         }
-        if (hint != null && Build.VERSION.SDK_INT >= 26) info.setHintText(hint);
+        if (host instanceof EditText) {
+            // Keep the visible placeholder and entered text intact. Android exposes
+            // an editable control's name as hint text, not contentDescription.
+            String name = label != null && !label.isEmpty() ? label : null;
+            if (hint != null && !hint.isEmpty()) name = name == null ? hint : name + ", " + hint;
+            if (name != null) {
+                boolean empty = ((EditText) host).length() == 0;
+                if (Build.VERSION.SDK_INT >= 26) {
+                    info.setHintText(name);
+                    info.setShowingHintText(empty);
+                }
+                if (empty) info.setText(name);
+            }
+        } else if (hint != null && Build.VERSION.SDK_INT >= 26) {
+            info.setHintText(hint);
+        }
         if (testId != null) info.setViewIdResourceName(testId);
         if ((state & 1) != 0) info.setEnabled(false);
         if ((state & 2) != 0) info.setSelected(true);

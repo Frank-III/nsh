@@ -77,6 +77,7 @@ final class InputBox extends FrameLayout implements Node {
         this.mounter = mounter;
         this.id = id;
         setBackground(decor);
+        setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
         edit = new EditText(context) {
             @Override
             protected void onAttachedToWindow() {
