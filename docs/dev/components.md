@@ -1016,7 +1016,8 @@ toast's `transitionStatus` and Base UI's `data-starting-style` / `data-ending-st
 `endingClass` / `endingStyle` (its own `class` / `style` are the bubble's). `popup.rs`' `PopupPresence` follows the
 open state: opened, the popup is made with its starting look, which it keeps until the next display frame (or 50 ms
 where none comes, as `Toast`'s), so `transition-*` classes run from it; closed, it stays mounted with its ending look
-and `pointer-events-none`, while the touch screens' backdrop goes and presses outside and Escape are no attempts any more,
+and `pointer-events-none`, while the touch screens' backdrop lets presses through (hidden from screen readers, which
+would activate it anyway) and presses outside and Escape are no attempts any more,
 for as long as its transitions then run: the platforms run transitions without reporting their end, so it asks the
 core (`ElementRef::transition_time`, an `Action::TransitionTime` the commit answers from the node's resolved
 `transition`, the app's `class`, `style` and theme included: the longest duration plus delay, two seconds at most),
@@ -1028,7 +1029,10 @@ for one with no looks. The state's classes are important (`!`) over the part's `
 style comes after the part's (`Style::then`), applied with `Element::state_inline_style`, which follows the typed
 styles a Rust app's state style has even when the part's has none. Closing a desktop menu closes its submenus, and
 closing a submenu its own, each with its exit. A sheet (`Sheet`, menus on touch screens, `Select`'s list) keeps
-`SheetMotion`.
+`SheetMotion`. A `Popover`'s backdrop is made with its popup and before it, and stays as long as the popup does
+(inert and hidden from screen readers while `closeOnPressOutside` is off): the core shows a later overlay on top, so
+a backdrop made later, as a `when` branch that comes and goes is, would cover the popup and take the presses meant for
+its content.
 
 How a popup presents itself follows the device (`is_desktop()`; one presentation, `auto`, for now), by what the popup
 is for, never by replacing one popup with another everywhere:
