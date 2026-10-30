@@ -13,7 +13,7 @@ use objc2::{
 };
 use objc2_core_foundation::{CGPoint, CGRect, CGSize};
 use objc2_foundation::{NSObject, NSObjectProtocol, NSString, NSURL};
-use objc2_ui_kit::{UIView, UIViewAutoresizing};
+use objc2_ui_kit::{UIColor, UIView, UIViewAutoresizing};
 
 use crate::native_view::NshView;
 
@@ -233,6 +233,16 @@ impl WebHost {
                 let ui: &UIView = &*(Retained::as_ptr(&web) as *const UIView);
                 ui.setAutoresizingMask(UIViewAutoresizing::FlexibleWidth | UIViewAutoresizing::FlexibleHeight);
                 ui.setFrame(view.bounds());
+                // Transparent, as on macOS (`drawsBackground`): WebKit paints white
+                // otherwise, so a page without a background of its own shows the
+                // node's `backgroundColor` (or what is behind it) instead of white,
+                // and dark mode has no white flash before the first paint.
+                ui.setOpaque(false);
+                ui.setBackgroundColor(Some(&UIColor::clearColor()));
+                let scroll: Option<Retained<UIView>> = msg_send![&web, scrollView];
+                if let Some(scroll) = scroll {
+                    scroll.setBackgroundColor(Some(&UIColor::clearColor()));
+                }
                 view.addSubview(ui);
                 web
             }
