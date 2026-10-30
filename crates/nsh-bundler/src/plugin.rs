@@ -425,6 +425,18 @@ impl Plugin for NshPlugin {
 
     async fn load(&self, _cx: SharedLoadPluginContext, args: &HookLoadArgs<'_>) -> HookLoadReturn {
         let path = Path::new(args.id);
+        if !has_extension(path, FONT_EXTENSIONS) && !has_extension(path, IMAGE_EXTENSIONS) {
+            return Ok(None);
+        }
+        if !path.starts_with(&self.root) {
+            return Err(self.fail(
+                path,
+                &format!(
+                    "assets must be inside the app's directory ({}); move the file, or open an entry whose directory contains it",
+                    self.root.to_string_lossy().replace('\\', "/"),
+                ),
+            ));
+        }
         let rel = self.rel(path);
         if has_extension(path, FONT_EXTENSIONS) {
             // A font import is its family name; the runtime registers the
@@ -445,9 +457,6 @@ impl Plugin for NshPlugin {
                 module_type: Some(ModuleType::Js),
                 ..Default::default()
             }));
-        }
-        if !has_extension(path, IMAGE_EXTENSIONS) {
-            return Ok(None);
         }
         // An image import is an asset descriptor; the natural size (in
         // points) lets the image lay out before it is decoded. An SVG's is
@@ -614,6 +623,46 @@ mod tests {
     fn svg(body: &str) -> Vec<u8> {
         format!(r#"<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10">{body}</svg>"#)
             .into_bytes()
+    }
+
+    #[test]
+    fn assets_must_be_inside_the_entry_directory() {
+        let dir = app("outside-root", "flag.png", &[("flag.png", (40, 30))]);
+        let entry_dir = dir.join("fixture");
+        std::fs::create_dir_all(&entry_dir).unwrap();
+        for extension in FONT_EXTENSIONS.iter().chain(IMAGE_EXTENSIONS) {
+            let file = dir.join(format!("outside.{extension}"));
+            std::fs::write(&file, b"not read outside the root").unwrap();
+            std::fs::write(
+                entry_dir.join("App.tsx"),
+                format!("import asset from '../outside.{extension}'; console.log(asset);"),
+            )
+            .unwrap();
+            let Err(error) = try_bundle(&entry_dir) else {
+                panic!("an asset outside the app's directory must fail: {extension}");
+            };
+            assert_eq!(
+                error.to_string(),
+                format!(
+                    "{}\nassets must be inside the app's directory ({}); move the file, or open an entry whose directory contains it",
+                    dunce::canonicalize(&file)
+                        .unwrap()
+                        .to_string_lossy()
+                        .replace('\\', "/"),
+                    dunce::canonicalize(&entry_dir)
+                        .unwrap()
+                        .to_string_lossy()
+                        .replace('\\', "/"),
+                ),
+            );
+        }
+        let bundle = bundled(&dir);
+        assert!(
+            bundle.code.contains("asset:/img/flag.png"),
+            "{}",
+            bundle.code
+        );
+        assert_eq!(assets(&bundle), ["img/flag.png"]);
     }
 
     #[test]
