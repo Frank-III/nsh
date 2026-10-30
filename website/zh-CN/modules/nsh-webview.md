@@ -69,7 +69,7 @@ mount(Browser);
 |---|---|---|
 | `onLoadStart` | `WebViewNavigation` | 页面开始加载。 |
 | `onLoad` | `WebViewNavigation` | 页面加载完成。 |
-| `onError` | `{ message: string }` | 页面加载失败。 |
+| `onError` | `{ message: string }` | 页面加载失败，或（Android）页面的渲染进程已终止；此时视图为空，应用重新挂载该视图即可恢复。 |
 | `onNavigationStateChange` | `WebViewNavigation` | URL、标题、加载状态或历史记录发生变化。 |
 | `onMessage` | `{ data: string }` | 页面调用了 `window.nsh.postMessage(data)`。 |
 
