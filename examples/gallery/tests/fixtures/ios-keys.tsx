@@ -13,6 +13,7 @@ function App() {
   keymap.bind("down", hit("down"));
   keymap.bind("escape", hit("escape"));
   keymap.bind("j", hit("j"));
+  keymap.bind("mod+j", hit("mod+j"));
   return <View style={{ flex: 1, paddingTop: 80 }}>
     <Input ref={(ref) => { field = ref; }} testID="field" onFocus={() => focused.set(true)} onBlur={() => focused.set(false)} style={{ height: 40 }} />
     <Text testID="blur" onPress={() => field?.blur()}>blur field</Text>
