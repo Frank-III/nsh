@@ -224,7 +224,12 @@ misses the deadline is not waited for again until it catches up (`docs/dev/macos
   interception; a scroll view that intercepts first (past its touch slop) wins as before. Web: `nsh.js` defers its
   drag scrolling while the gate is undecided. The activation travels with the touches (`TouchEvent::activated`; the
   iOS gate hands it to the root's tracker, which reports it with these touches or the next), and the gated view
-  becomes the responder (its termination request is honored as for any claim). Its own `…ShouldSetResponder`
+  becomes the responder (its termination request is honored as for any claim). The press under the finger ends at
+  the activation (`onPressOut`, its pressed style cleared), and the lift ends the pan alone: iOS's `PanGate` prevents
+  every `PressRecognizer`, its own view's included (`canPreventGestureRecognizer:`; the view's `pan` / `pinch` go on
+  with it), and Android's `TouchTracker` cancels the presses on the finger's view chain (`Box.cancelPress`,
+  `Pressable.cancel`) and the press feedback it shows; the web presses out at the activation too (`decideGate` in
+  `nsh.js`), and the desktops end the press at their 10-point press slop (`input::PRESS_SLOP`). Its own `…ShouldSetResponder`
   handlers (and a Rust element's other claims) are never asked: the view is a responder exactly when its pan is
   active, so `PanResponder`'s `panHandlers` work unchanged next to the prop.
 - **Accessibility**: `accessible`, `role`, `accessibilityLabel` / `Hint` / `State` / `Value` / `Actions` / `Level` +
