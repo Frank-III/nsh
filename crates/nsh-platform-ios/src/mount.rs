@@ -3320,7 +3320,9 @@ impl Mounter {
                     .label
                     .as_deref()
                     .map(objc2_foundation::NSString::from_str);
-                view.setAccessibilityLabel(label.as_deref(), mtm);
+                if !matches!(s.native, Native::Input(_)) {
+                    view.setAccessibilityLabel(label.as_deref(), mtm);
+                }
                 view.setAccessibilityElementsHidden(props.accessibility.hidden, mtm);
                 // An input that is no target lets touches through to the
                 // views below it (an editor's hidden input at its caret,
@@ -3331,6 +3333,9 @@ impl Mounter {
                         props.pointer_events,
                         nsh_core::PointerEvents::None | nsh_core::PointerEvents::BoxNone
                     ));
+                }
+                if let Native::Input(input) = &mut s.native {
+                    input.set_accessibility_label(props.accessibility.label.as_deref());
                 }
             }
         }
@@ -3352,7 +3357,11 @@ impl Mounter {
     /// Only the label of the view's props changed.
     fn set_accessibility_label(&mut self, id: NodeId, label: Option<std::sync::Arc<str>>) {
         let mtm = self.mtm;
-        let Some(s) = self.slot(id) else { return };
+        let Some(s) = self.slot_mut(id) else { return };
+        if let Native::Input(input) = &mut s.native {
+            input.set_accessibility_label(label.as_deref());
+            return;
+        }
         match s.native.nsh() {
             Some(view) => view.set_accessibility_label(label),
             None => {
