@@ -49,6 +49,126 @@ use objc2_ui_kit::{UIResponder, UIView, UIViewControllerTransitionCoordinator, U
 
 use crate::target::EventTarget;
 
+// Diagnostic branch only. NSLog is variadic and is not bound by objc2-foundation.
+#[link(name = "Foundation", kind = "framework")]
+unsafe extern "C" {
+    fn NSLog(format: *const NSString, ...);
+}
+
+fn debug_enabled() -> bool {
+    static ENABLED: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *ENABLED.get_or_init(|| {
+        let enabled = std::env::var("NSH_KEY_DEBUG").is_ok_and(|v| v == "1");
+        if enabled {
+            debug_log("enabled NSH_KEY_DEBUG=1");
+        }
+        enabled
+    })
+}
+
+fn debug_log(message: &str) {
+    let format = NSString::from_str("nsh-keys: %@");
+    let message = NSString::from_str(message);
+    // SAFETY: constant format with exactly one NSString object argument.
+    unsafe { NSLog(&*format, &*message as *const NSString) };
+}
+
+fn debug_class(object: Option<&AnyObject>) -> String {
+    object.map_or_else(
+        || "nil".into(),
+        |o| o.class().name().to_string_lossy().into_owned(),
+    )
+}
+
+fn debug_context(view: &UIView) -> String {
+    let Some(window) = view.window() else {
+        return "firstResponder=no-window focusedItem=no-window".into();
+    };
+    // SAFETY: same private UIWindow query as synth::first_responder, guarded
+    // for OS versions without it. This branch is for local diagnostics only.
+    let first: Option<Retained<AnyObject>> = unsafe {
+        let supported: bool = msg_send![&window, respondsToSelector: sel!(firstResponder)];
+        if supported {
+            msg_send![&window, firstResponder]
+        } else {
+            None
+        }
+    };
+    let focused: Option<Retained<AnyObject>> = unsafe {
+        // SAFETY: optional public UIKit focus API, guarded for availability.
+        AnyClass::get(c"UIFocusSystem").and_then(|class| {
+            let supported: bool =
+                msg_send![class, respondsToSelector: sel!(focusSystemForEnvironment:)];
+            if !supported {
+                return None;
+            }
+            let system: Option<Retained<AnyObject>> =
+                msg_send![class, focusSystemForEnvironment: &*window];
+            system.and_then(|system| msg_send![&system, focusedItem])
+        })
+    };
+    format!(
+        "firstResponder={} focusedItem={}",
+        debug_class(first.as_deref()),
+        debug_class(focused.as_deref())
+    )
+}
+
+pub(crate) fn debug_commands(view: &UIView, commands: Option<&NSArray<AnyObject>>) {
+    if !debug_enabled() {
+        return;
+    }
+    let entries: Vec<_> = commands
+        .into_iter()
+        .flat_map(|a| a.iter())
+        .map(|command| {
+            // SAFETY: each returned element is a UIKeyCommand.
+            let (input, flags): (Option<Retained<NSString>>, isize) = unsafe {
+                (
+                    msg_send![&command, input],
+                    msg_send![&command, modifierFlags],
+                )
+            };
+            format!("input={:?} flags={flags:#x}", input.map(|s| s.to_string()))
+        })
+        .collect();
+    debug_log(&format!(
+        "keyCommands who={} isFirstResponder={} count={} commands=[{}] {}",
+        view.class().name().to_string_lossy(),
+        view.isFirstResponder(),
+        entries.len(),
+        entries.join(", "),
+        debug_context(view)
+    ));
+}
+
+pub(crate) fn debug_presses(view: &UIView, presses: &AnyObject, consumed: bool) {
+    if !debug_enabled() {
+        return;
+    }
+    let entries: Vec<_> = keys(presses)
+        .iter()
+        .map(|key| {
+            // SAFETY: UIKey properties, as in keystroke().
+            let (characters, flags): (Option<Retained<NSString>>, isize) =
+                unsafe { (msg_send![key, characters], msg_send![key, modifierFlags]) };
+            format!(
+                "code={} characters={:?} flags={flags:#x}",
+                code(key),
+                characters.map(|s| s.to_string())
+            )
+        })
+        .collect();
+    debug_log(&format!(
+        "pressesBegan who={} isFirstResponder={} keys=[{}] consumed={} {}",
+        view.class().name().to_string_lossy(),
+        view.isFirstResponder(),
+        entries.join(", "),
+        consumed,
+        debug_context(view)
+    ));
+}
+
 /// How long a key is held before it repeats, and the time between repeats:
 /// iOS's defaults for a hardware keyboard.
 const REPEAT_DELAY: Duration = Duration::from_millis(400);
@@ -376,6 +496,14 @@ pub(crate) fn commands(
 }
 
 pub(crate) fn command(view: &UIView, target: &EventTarget, sender: &AnyObject) {
+    if debug_enabled() {
+        debug_log(&format!(
+            "command reached who={} isFirstResponder={} {}",
+            view.class().name().to_string_lossy(),
+            view.isFirstResponder(),
+            debug_context(view)
+        ));
+    }
     if !view.isFirstResponder() {
         return;
     }
@@ -415,7 +543,9 @@ define_class!(
     impl CommandView {
         #[unsafe(method_id(keyCommands))]
         fn key_commands(&self) -> Option<Retained<NSArray<AnyObject>>> {
-            commands(self, &self.ivars().target, self.ivars().modal)
+            let result = commands(self, &self.ivars().target, self.ivars().modal);
+            debug_commands(self, result.as_deref());
+            result
         }
 
         #[unsafe(method(nshKeyCommand:))]
@@ -443,7 +573,9 @@ define_class!(
             let escape = self.ivars().modal && keys(presses).iter().any(|key| {
                 keystroke(key).is_some_and(|s| s.key == Key::Escape && s.modifiers == Modifiers::default())
             });
-            if escape || !root_began(&self.ivars().target, presses, self.isFirstResponder()) {
+            let consumed = !escape && root_began(&self.ivars().target, presses, self.isFirstResponder());
+            debug_presses(self, presses, consumed);
+            if !consumed {
                 // SAFETY: calling the superclass implementation.
                 let _: () = unsafe { msg_send![super(self), pressesBegan: presses, withEvent: event] };
             }
@@ -482,6 +614,9 @@ impl CommandView {
 /// Restore only an empty keyboard focus, after UIKit finishes transferring it.
 /// A fallback responder takes no text and does not request accessibility focus.
 pub(crate) fn restore(window: &UIWindow) {
+    if debug_enabled() {
+        debug_log(&format!("restore scheduled {}", debug_context(window)));
+    }
     restore_after(window, Duration::ZERO);
     // Editing-end can precede UIKit releasing the hardware keyboard focus.
     restore_after(window, Duration::from_millis(100));
@@ -495,15 +630,20 @@ fn restore_after(window: &UIWindow, delay: Duration) {
         .after(when, move || {
             let mtm = MainThreadMarker::new().expect("main queue");
             let Some(window) = window.into_inner(mtm).load() else {
+                if debug_enabled() { debug_log("restore skipped window=gone occupied=unknown candidate=none becomeFirstResponder=not-called"); }
                 return;
             };
-            fn occupied(view: &UIView) -> bool {
-                (view.isFirstResponder() && !is_fallback(view))
-                    || view.nextResponder().is_some_and(|r| {
-                        r.isFirstResponder()
-                            && r.downcast_ref::<UIView>().is_none_or(|v| !is_fallback(v))
-                    })
-                    || view.subviews().iter().any(|v| occupied(&v))
+            fn occupied(view: &UIView) -> Option<Retained<UIResponder>> {
+                if view.isFirstResponder() && !is_fallback(view) {
+                    return Some(view.retain().into_super());
+                }
+                if let Some(r) = view.nextResponder()
+                    && r.isFirstResponder()
+                    && r.downcast_ref::<UIView>().is_none_or(|v| !is_fallback(v))
+                {
+                    return Some(r);
+                }
+                view.subviews().iter().find_map(|v| occupied(&v))
             }
             fn candidate(view: &UIView) -> Option<Retained<UIView>> {
                 if view.window().is_none() || view.isHidden() || view.alpha() == 0.0 {
@@ -517,6 +657,11 @@ fn restore_after(window: &UIWindow, delay: Duration) {
                     .or_else(|| is_fallback(view).then(|| view.retain()))
             }
             let Some(mut controller) = window.rootViewController() else {
+                if debug_enabled() {
+                    let owner = occupied(&window);
+                    debug_log(&format!("restore skipped controller=nil occupied={} occupiedClass={} candidate=none becomeFirstResponder=not-called {}",
+                        owner.is_some(), debug_class(owner.as_deref().map(|r| r.as_ref())), debug_context(&window)));
+                }
                 return;
             };
             while let Some(presented) = controller.presentedViewController() {
@@ -539,18 +684,20 @@ fn restore_after(window: &UIWindow, delay: Duration) {
                 );
                 coordinator.animateAlongsideTransition_completion(None, Some(&block));
             }
-            if occupied(&window) {
-                return;
+            let owner = occupied(&window);
+            let candidate = if owner.is_none() && !controller.isBeingDismissed() {
+                controller.view().and_then(|v| candidate(&v))
+            } else { None };
+            let became = candidate.as_ref().and_then(|view| {
+                (!view.isFirstResponder()).then(|| view.becomeFirstResponder())
+            });
+            if debug_enabled() {
+                debug_log(&format!("restore delay_ms={} occupied={} occupiedClass={} dismissing={} candidate={} becomeFirstResponder={:?} {}",
+                    delay.as_millis(), owner.is_some(), debug_class(owner.as_deref().map(|r| r.as_ref())),
+                    controller.isBeingDismissed(), debug_class(candidate.as_deref().map(|v| v.as_ref())), became, debug_context(&window)));
             }
-            if !controller.isBeingDismissed()
-                && let Some(view) = controller.view().and_then(|v| candidate(&v))
-                && !view.isFirstResponder()
-                && !view.becomeFirstResponder()
-            {
-                log::debug!(
-                    "keyboard fallback could not become first responder: {:?}",
-                    view
-                );
+            if became == Some(false) {
+                log::debug!("keyboard fallback could not become first responder: {:?}", candidate);
             }
         })
         .ok();

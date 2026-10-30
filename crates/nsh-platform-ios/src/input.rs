@@ -149,11 +149,21 @@ define_class!(
             }
         }
 
+        #[unsafe(method_id(keyCommands))]
+        fn key_commands(&self) -> Option<Retained<NSArray<AnyObject>>> {
+            // SAFETY: calling the superclass implementation without changing its commands.
+            let result: Option<Retained<NSArray<AnyObject>>> = unsafe { msg_send![super(self), keyCommands] };
+            crate::keymap::debug_commands(self.as_ref(), result.as_deref());
+            result
+        }
+
         /// A hardware keyboard's keys go to the app's shortcuts first
         /// (`nsh/keymap`): a key a binding takes never reaches the input.
         #[unsafe(method(pressesBegan:withEvent:))]
         fn presses_began(&self, presses: &AnyObject, event: Option<&AnyObject>) {
-            if !crate::keymap::input_began(self.as_ref(), presses) {
+            let consumed = crate::keymap::input_began(self.as_ref(), presses);
+            crate::keymap::debug_presses(self.as_ref(), presses, consumed);
+            if !consumed {
                 // SAFETY: calling the superclass implementation.
                 let _: () = unsafe { msg_send![super(self), pressesBegan: presses, withEvent: event] };
             }
@@ -323,7 +333,9 @@ define_class!(
             // SAFETY: calling the superclass implementation.
             let inherited: Option<Retained<NSArray<AnyObject>>> =
                 unsafe { msg_send![super(self), keyCommands] };
-            self.with_line_breaks(inherited)
+            let result = self.with_line_breaks(inherited);
+            crate::keymap::debug_commands(self.as_ref(), result.as_deref());
+            result
         }
 
         #[unsafe(method(nshInsertLineBreak:))]
@@ -338,7 +350,9 @@ define_class!(
         /// (`nsh/keymap`): a key a binding takes never reaches the input.
         #[unsafe(method(pressesBegan:withEvent:))]
         fn presses_began(&self, presses: &AnyObject, event: Option<&AnyObject>) {
-            if !crate::keymap::input_began(self.as_ref(), presses) {
+            let consumed = crate::keymap::input_began(self.as_ref(), presses);
+            crate::keymap::debug_presses(self.as_ref(), presses, consumed);
+            if !consumed {
                 // SAFETY: calling the superclass implementation.
                 let _: () = unsafe { msg_send![super(self), pressesBegan: presses, withEvent: event] };
             }

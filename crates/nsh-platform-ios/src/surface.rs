@@ -145,7 +145,9 @@ define_class!(
     impl RootView {
         #[unsafe(method_id(keyCommands))]
         fn key_commands(&self) -> Option<Retained<objc2_foundation::NSArray<AnyObject>>> {
-            self.target().and_then(|target| crate::keymap::commands(self, &target, false))
+            let result = self.target().and_then(|target| crate::keymap::commands(self, &target, false));
+            crate::keymap::debug_commands(self, result.as_deref());
+            result
         }
 
         #[unsafe(method(nshKeyCommand:))]
@@ -248,6 +250,7 @@ define_class!(
             let consumed = self
                 .target()
                 .is_some_and(|target| crate::keymap::root_began(&target, presses, self.isFirstResponder()));
+            crate::keymap::debug_presses(self, presses, consumed);
             if !consumed {
                 // SAFETY: calling the superclass implementation.
                 let _: () = unsafe { msg_send![super(self), pressesBegan: presses, withEvent: event] };
