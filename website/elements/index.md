@@ -494,7 +494,7 @@ their platform.
 
 | Prop | Description |
 |---|---|
-| `ios={{…}}` | iOS and Mac Catalyst. `<Input>`, `Dialog` and `WebView` add their own keys. |
+| `ios={{…}}` | iOS and Mac Catalyst. Every element takes `panScrollHandoff` (below). `<Input>`, `Dialog` and `WebView` add their own keys. |
 | `android={{…}}` | Android. Every element takes `ripple`, `elevation` and `accessibilityLiveRegion` (below). |
 | `desktop={{…}}` | Desktop platforms and desktop browsers; ignored on mobile. Every element takes `windowDrag` (below). |
 | `web={{…}}` | Browsers; ignored elsewhere. |
@@ -508,6 +508,10 @@ their platform.
 | `desktop` key | Rust | Type | Description |
 |---|---|---|---|
 | `windowDrag` | `.window_drag(..)` | `boolean` | Pressing the view drags the window, as its title bar would; `false` keeps a part of a draggable view clickable. See [a title bar of your own](../modules/nsh-desktop.md#a-title-bar-of-your-own). |
+
+| `ios` key | Rust | Type | Description |
+|---|---|---|---|
+| `panScrollHandoff` | `.pan_scroll_handoff(..)` | `boolean` | A vertical pan shares the touched descendant scroll view until that scroll reaches the top, then follows the remaining downward distance. The scroll stays at its adjusted top while the pan moves. |
 
 ```rust tabs
 use nsh_core::Ripple;

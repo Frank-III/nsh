@@ -624,6 +624,20 @@ view()
 
 `PanActivation::horizontal(active, fail)` 和 `PanActivation::vertical(active, fail)` 设置常用的组合。没有激活偏移时，任一方向移动 10 点后激活。激活之前，外层的滚动视图会等待它（iOS），视图的其他接管声明也不会被询问。激活后，滚动视图不能再拿走这些触摸，视图成为响应者（先 grant，再收到移动）；失败时滚动视图照常滚动。在 TSX 中，`PanResponder` 的 `panHandlers` 也可以一起用：和这个属性放在同一个视图上，`onPanResponderGrant` 在激活时运行。
 
+## 跟随滚动视图的拖动：panScrollHandoff
+
+另一种安排是：视图自己的纵向拖动，要等里面的滚动视图滚到顶部之后才移动。正在播放页里打开了歌词列表就是这种情况：在列表上向下拖时先滚动列表，列表到顶后同一段拖动接着带动页面。
+
+在 iOS 上，把 `ios={{ panScrollHandoff: true }}` 设在拥有拖动的视图上（Rust 中为 `.pan_scroll_handoff(true)`）。UIKit 于是同时识别这个拖动和被触摸的后代滚动。滚动还能移动时，拖动归滚动；到顶之后，剩下的向下距离跟随拖动，滚动停在调整后的顶部。`nsh/base` 的 `Sheet` 为自己的面板设置了这个标志。应用自己的表单把它设在拥有拖动的视图上：
+
+```tsx
+<View pan={{ y: dragY }} ios={{ panScrollHandoff: true }}>
+  <List each={lines} renderItem={Line} />
+</View>
+```
+
+Android 的拖动本身就会把还能滚动的后代滚动视图的拖动留给它，每个可拖动的视图都如此，所以这个标志属于 iOS。
+
 > [!NOTE]
 > 所有速度的单位都是每秒的点数：响应者手势的 `vx` / `vy`、拖动的速度以及弹簧或衰减的速度都是，所以 `vx` 可以直接传给弹簧或衰减。
 

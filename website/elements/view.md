@@ -93,7 +93,7 @@ set (`flexDirection: "column"`, `flex-col`, `.flex_col()`). A view that sets no 
 `focusStyle`, `disabledStyle`, `checkedStyle`), `onMouseEnter` / `onMouseMove` / `onMouseLeave`, `onContextMenu`,
 `onFileDragEnter` / `onFileDragLeave` / `onFileDrop`, `focusable`, `onLayout`, `ref`, `nativeID`, `testID`, the
 gesture props (`pan`, `pinch`, `rotation` and their events), the touch and responder props, the accessibility props
-and `ios` / `android` / `desktop`.
+and `ios` / `android` / `desktop`. On iOS, `ios={{ panScrollHandoff: true }}` (`.pan_scroll_handoff(..)` in Rust) lets a vertical pan share a scroll view inside the view: the scroll takes the drag until its top, then the pan follows the remaining downward distance.
 
 ## Selectable views
 

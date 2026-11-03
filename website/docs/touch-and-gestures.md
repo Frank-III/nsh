@@ -624,6 +624,20 @@ view()
 
 `PanActivation::horizontal(active, fail)` and `PanActivation::vertical(active, fail)` set the usual pairs. Without active offsets the pan activates after 10 points in any direction. Until it activates, the scroll views around wait for it (iOS) and the view's other claims are not asked. When it activates, the scroll views can no longer take these touches and the view becomes the responder (the grant, then the moves); when it fails, the scroll view scrolls as usual. In TSX, `PanResponder`'s `panHandlers` work with it too: spread them next to the prop, and `onPanResponderGrant` runs at the activation.
 
+## A pan that follows a scroll view: panScrollHandoff
+
+The other arrangement is a view whose own vertical pan should move once a scroll view inside it has reached the top. A Now Playing sheet with an open transcript is that case: a downward drag on the list scrolls the list, and the same drag continues into the sheet once the list is at the top.
+
+On iOS, set `ios={{ panScrollHandoff: true }}` on the view that pans (`.pan_scroll_handoff(true)` in Rust). UIKit then recognizes that pan together with the touched descendant scroll. The scroll takes the drag while it can still move. At the top, the remaining downward distance follows the pan, and the scroll stays at its adjusted top. `nsh/base`'s `Sheet` sets this for its own panel. An app-owned sheet sets it on the view that owns the pan:
+
+```tsx
+<View pan={{ y: dragY }} ios={{ panScrollHandoff: true }}>
+  <List each={lines} renderItem={Line} />
+</View>
+```
+
+Android's pan already leaves a drag to a descendant scroll that can still move, on every pannable view, so the flag is iOS's.
+
 > [!NOTE]
 > Every velocity is in points per second: the responder gesture's `vx` / `vy`, a pan's velocity and a spring's or a decay's, so `vx` goes to a spring or a decay as it is.
 

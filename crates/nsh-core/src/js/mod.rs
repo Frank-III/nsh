@@ -166,6 +166,7 @@ mod tests {
             ("HostProps", "  onLayout?: (e: { bounds: Bounds }) => void;"),
             ("AndroidHostProps", "  elevation?: number;"),
             ("IOSHostProps", "  backdropMaterial?: BackdropMaterial;"),
+            ("IOSHostProps", "  panScrollHandoff?: boolean;"),
             ("InputHostProps", "  keyboardType?: KeyboardType;"),
             (
                 "InputHostProps",
@@ -215,6 +216,14 @@ mod tests {
             let end = at + elements[at..].find("\n}").unwrap();
             assert!(elements[at..end].contains(prop), "{interface}: {prop}");
         }
+        let host_at = elements
+            .find("export interface HostProps {")
+            .expect("HostProps");
+        let host_end = host_at + elements[host_at..].find("\n}").unwrap();
+        assert!(
+            !elements[host_at..host_end].contains("panScrollHandoff"),
+            "panScrollHandoff belongs on IOSHostProps"
+        );
         assert!(elements.contains(
             "export type KeyboardType = \"default\" | \"number-pad\" | \"decimal-pad\" | \"numeric\" | \"numbers-and-punctuation\""
         ));

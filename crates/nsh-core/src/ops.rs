@@ -2328,8 +2328,11 @@ pub enum Prop {
     /// Whether native pans may start or update their bound values. Rust
     /// components use this to retain gesture state across permission changes.
     PanEnabled(bool),
-    /// A vertical pan cooperates with descendant scroll views on iOS:
-    /// scrolling consumes the drag until its top, then the pan follows.
+    /// `panScrollHandoff` (iOS): a vertical pan shares the touched
+    /// descendant scroll view until that scroll reaches its top, then
+    /// follows the remaining downward distance. The scroll stays at its
+    /// adjusted top while the pan moves.
+    #[prop(ios = "panScrollHandoff")]
     PanScrollHandoff(bool),
     /// `activeStyle`: the style while pressed (and not disabled), over the
     /// view's style; applied natively, no JS round trip.
