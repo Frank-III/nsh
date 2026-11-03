@@ -218,6 +218,7 @@ TSX 的子函数接收路由值本身，以及一个表示它在栈中位置的 
 | `headerStyle` | `.header_style(..)` | `{ backgroundColor?, color?, tintColor? }` | 平台默认 | iOS 和 Android：系统标题栏的颜色：背景、标题的颜色（`color`）和按钮的颜色（`tintColor`）。 |
 | `headerClass` | `.header_style_with(\|s\| ..)` | `string` | 无 | 以类表示的同样的颜色：`bg-*`，标题用 `text-*`，按钮用 `tint-*`（Rust 中为 `.bg(..)`、`.text_color(..)`、`.tint_color(..)`，主题颜色随外观切换）。`headerStyle` 优先于它们。 |
 | `popOnBack` | `.pop_on_back(..)` | `boolean` | `true` | 返回按钮和侧滑返回会弹出页面。见[离开页面](#leaving-a-page)。 |
+| `ios={{ interactivePopEnabled }}` | `.interactive_pop_enabled(..)` | `boolean` | `true` | iOS 和 Mac Catalyst：false 暂停栈顶页面的边缘返回及 iOS 26 全宽返回识别器；true 恢复各识别器原来的 UIKit 状态。支持响应式更新；返回按钮照常工作。 |
 | `popOnSwipe` | `.pop_on_swipe(..)` | `boolean` | `true` | 交互式返回手势会弹出页面：iOS 的侧滑返回、Android 跟随手指的预测性返回。返回按钮在任何情况下都会弹出页面。 |
 | `animation` | `.animation(..)` | `"default" \| "slide" \| "fade" \| "none"` | `"default"` | 页面进入和离开的方式。 |
 | `transitionShader` | `.transition_shader(TransitionShader::new(program))` | `{ source: string; uniforms?: Record<string, ShaderUniform>; duration?: number }` | 无 | 页面通过一个 WGSL 着色器进入和离开，取代它的 `animation`：`shade(uv)` 以 `sample_from` 读取下面的页面、以 `sample_to` 读取这个页面，`nsh.progress` 在 `duration` 毫秒内（默认 350）从 0 走到 1，页面离开时从 1 回到 0。系统要求减少动态效果时，页面使用自己的 `animation`。见 [Shader](./shader.md)。 |
@@ -268,7 +269,7 @@ fn profile(edit: impl Fn() + 'static) -> Screen {
 
 页面的内容从标题栏下方开始：在 iOS 和 Android 上位于不透明的系统标题栏之下，在桌面平台和 Web 上位于 `header` 之下。使用 `headerTransparent`、`headerLargeTitle` 或 `headerVisible={false}` 时，在 iOS 和 Android 上内容从页面顶部开始；用 [`env(safe-area-inset-top)`](./safe-area.md) 或 `safeAreaInsets()` 让它避开标题栏和状态栏。
 
-在 iOS 上，设置 `headerVisible={false}` 的页面在 `popOnSwipe` 和 `popOnBack` 为 true 时仍支持侧滑返回。
+在 iOS 上，设置 `headerVisible={false}` 的页面在 `popOnSwipe`、`popOnBack` 和 `ios.interactivePopEnabled` 为 true 时仍支持侧滑返回。
 允许的交互式返回手势在转场开始时结束当前输入，键盘在拖动过程中收起。取消转场时，若其他控件没有取得焦点，
 会恢复原输入框的焦点。
 
@@ -368,3 +369,15 @@ function EditNote() {
 - **桌面平台（macOS、Windows、Linux、GPUI）和 Web**：每个页面在顶部显示它的 `header`，内容位于其下方。桌面平台上 Escape、Alt+左方向键和鼠标的后退键返回，Web 上是浏览器的后退按钮。
 
 要在栈及其标题栏之上显示内容，比如 sheet 或全屏流程，使用 [Dialog](./dialog.md)。
+
+<a id="pausing-ios-swipe-back-during-a-chart-scrub"></a>
+
+### 图表拖动时暂停 iOS 返回手势
+
+长按开始图表拖动时，将 `ios.interactivePopEnabled` 设为 `false`，在触摸结束或取消时恢复为 `true`。
+例如 `<NavPage ios={{ interactivePopEnabled: !scrubbing() }}>`；Rust 使用
+`.interactive_pop_enabled(move || !scrubbing.get())`。更新在挂载到主线程后生效，应在开始横向拖动前设置。
+true 保留 UIKit 原有状态；暂停后则恢复各识别器暂停前保存的值，不会启用 UIKit 原本停用的内容返回手势。
+被覆盖的页面保留自己的设置，返回栈顶后再次应用。原生返回按钮和程序控制的导航照常工作；Android
+预测性返回及其他平台保持原有行为。启用识别器后仍遵守 `popOnSwipe` 和 `popOnBack`。
+`examples/interactive-pop` 提供开关及长按后拖动的示例。

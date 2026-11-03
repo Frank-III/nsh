@@ -22,6 +22,7 @@ import BaseEditor from "./base-editor";
 import BaseHoverCard from "./base-hover-card";
 import BaseLink from "./base-link";
 import BaseNavPage from "./base-nav-page";
+import BaseInteractivePop from "./base-interactive-pop";
 import BaseNavStack from "./base-nav-stack";
 import BaseNumberInput from "./base-number-input";
 import BaseOtpInput from "./base-otp-input";
@@ -72,6 +73,7 @@ const cases: Record<string, () => JSX.Element> = {
   "base-hover-card": BaseHoverCard,
   "base-link": BaseLink,
   "base-nav-page": BaseNavPage,
+  "base-interactive-pop": BaseInteractivePop,
   "base-nav-stack": BaseNavStack,
   "base-number-input": BaseNumberInput,
   "base-otp-input": BaseOtpInput,

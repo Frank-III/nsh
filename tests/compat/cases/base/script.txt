@@ -4251,3 +4251,25 @@ covers [events] HoverCard.onOpenChange
 covers [events] HoverCard.onOpen
 covers [events] HoverCard.onClose
 covers [events] HoverCard.onPosition
+
+# base-interactive-pop: the iOS flag leaves the other back policies alone.
+# Lock the mounted iOS prop as well as the independent back policies.
+tap id:case-base-interactive-pop
+expect Pop enabled: false
+expect Pop depth: 2
+prop id:interactive-detail ios.interactivePopEnabled false
+prop id:interactive-detail popOnSwipe true
+prop id:interactive-detail popOnBack true
+tap text:Toggle iOS pop
+expect Pop enabled: true
+prop id:interactive-detail ios.interactivePopEnabled true
+tap text:Toggle iOS pop
+expect Pop enabled: false
+prop id:interactive-detail ios.interactivePopEnabled false
+prop id:interactive-detail popOnSwipe true
+prop id:interactive-detail popOnBack true
+tap text:Pop programmatically
+expect Pop depth: 1
+absent Pop page: detail
+expect Pop page: root
+covers [props] ios.interactivePopEnabled

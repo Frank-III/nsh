@@ -231,7 +231,7 @@ export const nav = createNavStack<Route>([{ name: "home" }]);
 
 页面（Rust 中是 `nav_page()`，TSX 中是 `NavPage`）包裹页面内容并携带它的标题栏。iOS 和 Android 显示系统标题栏，由标题和标题栏选项设置。桌面和 Web 显示页面的标题栏插槽（`.header(..)`，TSX 的 `header`），即应用自己的视图，放在页面顶部：与页面同宽，高度由它自己的布局决定，内容位于它下方。像上面的例子那样两者都给，页面在每个平台上都显得自然。所有选项都是响应式的：改变 signal，标题栏随之更新。
 
-在 Rust 中，下表的每个属性都是 `nav_page()` 上蛇形命名的方法：`.title(..)`、`.header(..)`、`.header_visible(..)`、`.header_transparent(..)`、`.header_style_with(..)`、`.header_style(..)`、`.header_back_visible(..)`、`.header_left(..)`、`.header_right(..)`、`.header_title(..)`、`.header_large_title(..)`、`.header_back_title(..)`、`.animation(ScreenAnimation::Fade)`、`.status_bar(..)`、`.pop_on_swipe(..)`、`.pop_on_back(..)`、`.on_back_press(..)`、`.on_dismiss(..)`；它的子元素就是页面内容。
+在 Rust 中，下表的每个属性都是 `nav_page()` 上蛇形命名的方法：`.title(..)`、`.header(..)`、`.header_visible(..)`、`.header_transparent(..)`、`.header_style_with(..)`、`.header_style(..)`、`.header_back_visible(..)`、`.header_left(..)`、`.header_right(..)`、`.header_title(..)`、`.header_large_title(..)`、`.header_back_title(..)`、`.animation(ScreenAnimation::Fade)`、`.status_bar(..)`、`.interactive_pop_enabled(..)`、`.pop_on_swipe(..)`、`.pop_on_back(..)`、`.on_back_press(..)`、`.on_dismiss(..)`；它的子元素就是页面内容。
 
 | 属性 | 类型 | 默认值 | 说明 |
 |---|---|---|---|
@@ -253,6 +253,7 @@ export const nav = createNavStack<Route>([{ name: "home" }]);
 | `headerBackTitle` | `string` | | 返回到本页面的返回按钮上的文字（iOS；Android 的向上箭头把它读给屏幕阅读器）。 |
 | `animation` | `"default" \| "slide" \| "fade" \| "none"` | `"default"` | 页面进入和离开的方式。 |
 | `statusBar` | `{ foreground?, hidden?, animated? }` | | iOS 和 Android：页面在最上层时的状态栏（[状态栏](../modules/nsh-base.md#status-bar)）。 |
+| `ios={{ interactivePopEnabled }}` | `boolean` | `true` | iOS 和 Mac Catalyst：false 暂停栈顶页面的边缘返回及 iOS 26 全宽返回识别器；true 恢复各识别器原来的 UIKit 状态。支持响应式更新；返回按钮照常工作。 |
 | `popOnSwipe` | `boolean` | `true` | 交互式返回手势（iOS 侧滑返回、Android 预测性返回）会返回。返回按钮无论如何都会返回。 |
 | `popOnBack` | `boolean` | `true` | 每一种返回方式都会弹出页面：返回按钮、Android 返回键、桌面的返回键、浏览器的返回按钮和侧滑。 |
 | `onBackPress` | `() => void` | | 用户在页面上按了返回，无论 `popOnBack` 是否让它弹出。 |

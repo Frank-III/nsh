@@ -1481,6 +1481,12 @@ pub enum ScreenProp {
     /// true; iOS and Android).
     #[prop(js = "headerBackVisible", default = true, on = SCREEN)]
     HeaderBackVisible(bool),
+    /// `ios={{ interactivePopEnabled }}`: false pauses the top page's edge
+    /// and content pop recognizers on iOS and Mac Catalyst. True restores
+    /// their prior UIKit state (default true). Reactive; back buttons and
+    /// other platforms are unaffected.
+    #[prop(ios = "interactivePopEnabled", default = true, on = SCREEN)]
+    InteractivePopEnabled(bool),
     /// `popOnSwipe`: the interactive back gesture pops (iOS swipe back,
     /// Android predictive back following the finger); the back buttons pop
     /// either way (default true).

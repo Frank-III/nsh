@@ -638,3 +638,11 @@ view()
 - [滚动](./scrolling.md)：键盘点击设置、滚动视图与嵌套手势。
 - [`PanResponder`](../modules/nsh.md#panresponder)：`PanResponder` 参考。
 - [无障碍](./accessibility.md)：可按压视图是无障碍元素；给它们设置角色和标签。
+
+### 图表拖动与 iOS 导航
+
+`NavPage` 中的图表可使用 `ios={{ interactivePopEnabled: !scrubbing() }}` 暂停 iOS 返回手势。
+长按开始拖动时设置信号，在 `onTouchEnd` 和 `onTouchCancel` 时清除。当前页面位于栈顶时，
+边缘返回识别器及 iOS 26 全宽返回识别器都会停用；返回按钮和 Android 预测性返回照常工作。
+请在横向拖动前设置，让属性更新先到达主线程。参见 [NavPage](../elements/nav-stack.md#pausing-ios-swipe-back-during-a-chart-scrub)
+及 `examples/interactive-pop`。
