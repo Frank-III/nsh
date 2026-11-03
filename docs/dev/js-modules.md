@@ -65,7 +65,9 @@ the chunks of a split bundle (`Screen.js`: a name that is no native module, with
   (`platform_props` in `dom.rs`) sends only the current platform's object, each key as a prop of its own (keys removed
   from the object are cleared); the core knows them by those names. Android: `ripple`, `elevation`,
   `accessibilityLiveRegion`, Dialog `statusBarTranslucent`. iOS: `backdropMaterial` (the system material of a
-  backdrop blur), input `inputAccessoryViewID` / `textContentType` / `keyboardAppearance`, Dialog
+  backdrop blur), `panScrollHandoff` (a vertical pan shares the touched descendant scroll until its top;
+  `ViewProps::pan_scroll_handoff`, UIKit only: Android's `Box.scrollTakes` yields without reading the prop),
+  input `inputAccessoryViewID` / `textContentType` / `keyboardAppearance`, Dialog
   `supportedOrientations`, WebView `allowsBackForwardNavigationGestures`. Desktop:
   `windowDrag`, WebView `allowsBackForwardNavigationGestures` (macOS' and Linux's trackpad swipes, Windows'
   touchscreen swipes; a system feature of several platforms names each: `#[prop(ios = "x", desktop = "x")]`). What

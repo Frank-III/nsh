@@ -41,6 +41,7 @@ mod native;
 mod net;
 mod open_url;
 mod package;
+mod pan_handoff;
 mod parity;
 mod platform;
 mod process;

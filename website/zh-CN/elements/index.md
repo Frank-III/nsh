@@ -429,7 +429,7 @@ stopPropagation() }`）；`…ShouldSetResponder` 回调还会收到 `gestureSta
 
 | 属性 | 说明 |
 |---|---|
-| `ios={{…}}` | iOS 和 Mac Catalyst。`<Input>`、`Dialog` 和 `WebView` 有各自的键。 |
+| `ios={{…}}` | iOS 和 Mac Catalyst。所有元素都支持 `panScrollHandoff`（见下表）。`<Input>`、`Dialog` 和 `WebView` 有各自的键。 |
 | `android={{…}}` | Android。所有元素都支持 `ripple`、`elevation` 和 `accessibilityLiveRegion`（见下表）。 |
 | `desktop={{…}}` | 桌面平台和桌面浏览器；在移动端被忽略。所有元素都支持 `windowDrag`（见下表）。 |
 | `web={{…}}` | 浏览器；在其他平台被忽略。 |
@@ -443,6 +443,10 @@ stopPropagation() }`）；`…ShouldSetResponder` 回调还会收到 `gestureSta
 | `desktop` 键 | Rust | 类型 | 说明 |
 |---|---|---|---|
 | `windowDrag` | `.window_drag(..)` | `boolean` | 按住视图拖动窗口，像按住标题栏一样；`false` 让可拖动视图中的一部分保持可点击。见[自定义标题栏](../modules/nsh-desktop.md#自定义标题栏)。 |
+
+| `ios` 键 | Rust | 类型 | 说明 |
+|---|---|---|---|
+| `panScrollHandoff` | `.pan_scroll_handoff(..)` | `boolean` | 纵向拖动与被触摸的后代滚动视图共享，直到滚到顶部，然后跟随剩下的向下距离。拖动移动时，滚动停在调整后的顶部。 |
 
 ```rust tabs
 use nsh_core::Ripple;

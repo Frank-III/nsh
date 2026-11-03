@@ -1166,8 +1166,10 @@ after `onCancel`; a shorter, cancelled or declined gesture returns the panel. Re
 `Interactive::pan_enabled` filters the mounted pan values and event mask together, retaining the listeners and
 children while a sheet enters, exits or changes permission. `pan_scroll_handoff` asks UIKit to share the touched
 descendant scroll's pan: its initial offset consumes the first part of the drag, and the remaining downward
-distance moves the panel while the scroll stays at its adjusted top. Other backends retain their usual scroll
-arbitration. `SheetMotion` tags completion callbacks and fallback timers with a generation, so a prior exit cannot
+distance moves the panel while the scroll stays at its adjusted top. TSX sets the same flag with
+`ios={{ panScrollHandoff: true }}` (`#[prop(ios = "panScrollHandoff")]` on `Prop::PanScrollHandoff`). Android's
+`Box.scrollTakes` yields to a descendant scroll that can still move and does not read the prop. Other backends
+retain their usual scroll arbitration. `SheetMotion` tags completion callbacks and fallback timers with a generation, so a prior exit cannot
 unmount a reopened sheet or its backdrop.
 
 `SheetMotion` derives the programmatic translation from the remaining fade fraction times the current measured
