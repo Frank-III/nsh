@@ -230,6 +230,7 @@ the props' snake-case names.
 | `headerStyle` | `.header_style(..)` | `{ backgroundColor?, color?, tintColor? }` | platform | iOS and Android: the system header's colors: its background, the title's (`color`) and the buttons' (`tintColor`). |
 | `headerClass` | `.header_style_with(\|s\| ..)` | `string` | none | The same colors as classes: `bg-*`, `text-*` for the title, `tint-*` for the buttons (in Rust `.bg(..)`, `.text_color(..)`, `.tint_color(..)`, theme colors following the appearance). `headerStyle` wins over them. |
 | `popOnBack` | `.pop_on_back(..)` | `boolean` | `true` | The back buttons and the swipe back pop the page. See [Leaving a page](#leaving-a-page). |
+| `ios={{ interactivePopEnabled }}` | `.interactive_pop_enabled(..)` | `boolean` | `true` | iOS and Mac Catalyst: false pauses the top page's edge and iOS 26 content pop recognizers; true restores each recognizer's prior UIKit state. Reactive; back buttons keep working. |
 | `popOnSwipe` | `.pop_on_swipe(..)` | `boolean` | `true` | The interactive back gesture pops the page: iOS swipe back, Android predictive back that follows the finger. The back buttons pop either way. |
 | `animation` | `.animation(..)` | `"default" \| "slide" \| "fade" \| "none"` | `"default"` | How the page enters and leaves. |
 | `statusBar` | `.status_bar(..)` | `{ foreground?, hidden?, animated? }` | none | iOS and Android: the status bar while the page is on top. See [Status bar](../modules/nsh-base.md#status-bar). |
@@ -280,7 +281,8 @@ desktops and the web. With `headerTransparent`, `headerLargeTitle` or `headerVis
 the page on iOS and Android; use [`env(safe-area-inset-top)`](./safe-area.md) or `safeAreaInsets()` to keep it clear of the
 header and the status bar.
 
-On iOS, `headerVisible={false}` keeps swipe back enabled while `popOnSwipe` and `popOnBack` are true.
+On iOS, `headerVisible={false}` keeps swipe back enabled while `popOnSwipe`, `popOnBack` and
+`ios.interactivePopEnabled` are true.
 An accepted interactive back gesture ends editing as the transition starts, so the keyboard dismisses during the
 drag. Cancelling the transition restores the same editor's focus when another control has not taken it.
 
@@ -372,6 +374,33 @@ function EditNote() {
 `onBackPress` is called on every back press, also when the page pops, so it also tells you that the user went back.
 To turn off only the swipe gesture and keep the back buttons, use `popOnSwipe={false}`. The confirmation itself is an
 [AlertDialog](./alert-dialog.md).
+
+### Pausing iOS swipe back during a chart scrub
+
+Set `ios={{ interactivePopEnabled: false }}` while a horizontal interaction owns the page. The setting follows signals,
+so a long press can pause both the edge recognizer and the full-width content recognizer on iOS 26 and later.
+True preserves UIKit's state when NSH has never paused a recognizer. After a pause, it restores the enabled
+value saved for that recognizer, so a content gesture UIKit disabled stays disabled.
+Each page keeps its own setting while covered; the page that returns to the top supplies the setting again.
+The native back button and programmatic navigation keep working. Android predictive back and the other
+platforms keep their existing behavior. `popOnSwipe` and `popOnBack` still apply when the recognizers are enabled.
+
+```tsx
+const scrubbing = signal(false);
+<NavPage ios={{ interactivePopEnabled: !scrubbing() }}>
+  <View
+    onLongPress={() => scrubbing.set(true)}
+    onTouchEnd={() => scrubbing.set(false)}
+    onTouchCancel={() => scrubbing.set(false)}
+  >
+    <Chart />
+  </View>
+</NavPage>
+```
+
+In Rust, bind `.interactive_pop_enabled(move || !scrubbing.get())`. Restore the value on both release and
+cancellation. The prop takes effect when its update reaches the main thread, so start the scrub after the long
+press, before dragging. The `examples/interactive-pop` app demonstrates this interaction and a manual toggle.
 
 ## Platform notes
 

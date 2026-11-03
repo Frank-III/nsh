@@ -38,6 +38,7 @@ mod native_view;
 mod navigation;
 mod net;
 mod picker;
+mod pop_gesture;
 mod press;
 mod selectable_view;
 mod shader;

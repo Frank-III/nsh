@@ -1058,6 +1058,16 @@ impl Screen {
         self.bind_prop(visible, |v| Prop::Screen(ScreenProp::HeaderBackVisible(v)))
     }
 
+    /// Pauses iOS and Mac Catalyst edge and content pop recognizers when
+    /// false; true restores their prior UIKit state (default true).
+    /// Other platforms and back buttons are unaffected. Bind false during
+    /// a horizontal scrub. TSX: `ios={{ interactivePopEnabled }}`.
+    pub fn interactive_pop_enabled(self, enabled: impl IntoReactive<bool>) -> Self {
+        self.bind_prop(enabled, |v| {
+            Prop::Screen(ScreenProp::InteractivePopEnabled(v))
+        })
+    }
+
     /// The interactive back gesture pops (iOS swipe back, Android
     /// predictive back); the back buttons pop either way (default true).
     pub fn pop_on_swipe(self, enabled: impl IntoReactive<bool>) -> Self {

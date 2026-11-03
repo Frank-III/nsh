@@ -1446,6 +1446,9 @@ impl Mounter {
                 }) = self.slot_mut(id)
                 {
                     let hides = config.hides_bottom_bar_when_pushed;
+                    screen
+                        .controller
+                        .set_interactive_pop_enabled(config.interactive_pop_enabled);
                     screen.config = *config;
                     // Before the push that shows it: `willShow` reads this the
                     // moment the screen goes on the stack.
@@ -3396,9 +3399,11 @@ impl Mounter {
             .rev()
             .find(|s| !stack.popped.contains(s))
             .and_then(|&s| match self.slot(s).map(|s| &s.native) {
-                Some(Native::Screen(screen)) => {
-                    Some(screen.config.gesture_enabled && !screen.config.prevent_back)
-                }
+                Some(Native::Screen(screen)) => Some(
+                    screen.config.gesture_enabled
+                        && screen.config.interactive_pop_enabled
+                        && !screen.config.prevent_back,
+                ),
                 _ => None,
             });
         // Never while a push or pop is still animating.

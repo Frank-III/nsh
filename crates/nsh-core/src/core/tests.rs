@@ -15060,6 +15060,81 @@ mod views {
         }
     }
 
+    #[derive(Default)]
+    struct ScrubPage;
+
+    impl Component for ScrubPage {
+        type Props = PageProps;
+        type Event = NoEvent;
+
+        #[allow(deprecated)]
+        fn view(_: PageProps, _: Scope<NoEvent>) -> impl IntoElement {
+            let enabled = signal(false);
+            stack().child(
+                screen()
+                    .test_id("scrub-page")
+                    .interactive_pop_enabled(enabled)
+                    .child(view().test_id("toggle-pop").on_press(move |_: &()| {
+                        enabled.set(!enabled.get());
+                    })),
+            )
+        }
+    }
+
+    #[test]
+    fn interactive_pop_rust_binding_preserves_other_back_policies() {
+        assert!(ScreenConfig::default().interactive_pop_enabled);
+        let mut c = core();
+        c.mount_root(&Root::new::<ScrubPage>(|| PageProps {}));
+        let first = c.commit().unwrap();
+        let toggle = first
+            .items
+            .iter()
+            .find_map(|i| match i {
+                MountItem::ViewProps { id, props }
+                    if props.test_id.as_deref() == Some("toggle-pop") =>
+                {
+                    Some(*id)
+                }
+                _ => None,
+            })
+            .unwrap();
+        let page = first
+            .items
+            .iter()
+            .find_map(|i| match i {
+                MountItem::ViewProps { id, props }
+                    if props.test_id.as_deref() == Some("scrub-page") =>
+                {
+                    Some(*id)
+                }
+                _ => None,
+            })
+            .unwrap();
+        let config = |batch: &MountBatch| {
+            batch
+                .items
+                .iter()
+                .rev()
+                .find_map(|i| match i {
+                    MountItem::ScreenConfig { id, config } if *id == page => {
+                        Some((**config).clone())
+                    }
+                    _ => None,
+                })
+                .unwrap()
+        };
+        let disabled = config(&first);
+        assert!(!disabled.interactive_pop_enabled);
+        assert!(disabled.gesture_enabled);
+        assert!(!disabled.prevent_back);
+        assert!(c.component_event(toggle, EventKind::Press, &EventPayload::None));
+        let enabled = config(&c.commit().unwrap());
+        assert!(enabled.interactive_pop_enabled);
+        assert!(enabled.gesture_enabled);
+        assert!(!enabled.prevent_back);
+    }
+
     #[test]
     fn typed_header_styles_reach_the_screens_config() {
         let mut c = core();

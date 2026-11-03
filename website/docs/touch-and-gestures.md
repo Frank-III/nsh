@@ -638,3 +638,11 @@ The main thread never waits for your code. When the system needs an answer on th
 - [Scrolling](./scrolling.md): the keyboard taps setting, scroll views and nested gestures.
 - [`PanResponder`](../modules/nsh.md#panresponder): the `PanResponder` reference.
 - [Accessibility](./accessibility.md): pressable views are accessibility elements; give them a role and a label.
+
+### Chart scrubbing and iOS navigation
+
+A chart inside a `NavPage` can pause iOS swipe back with `ios={{ interactivePopEnabled: !scrubbing() }}`. Set the signal
+when the long press starts the scrub and clear it on both `onTouchEnd` and `onTouchCancel`. This disables the
+edge and iOS 26 full-width pop recognizers while the page is on top; the back button and Android predictive
+back keep their normal behavior. Set it before dragging, allowing the prop update to reach the main thread.
+See [NavPage](../elements/nav-stack.md#pausing-ios-swipe-back-during-a-chart-scrub) and `examples/interactive-pop`.

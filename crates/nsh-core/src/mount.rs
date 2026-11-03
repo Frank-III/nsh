@@ -374,11 +374,13 @@ pub struct StickyCell {
 /// (`title`, `headerLeft`, `headerStyle`, ...) are ignored.
 pub const NO_NATIVE_HEADER: (Points, Points) = (Points::ZERO, Points::ZERO);
 
-/// Options of a screen: its header and transitions.
+/// Options of a screen: its header, transitions and back navigation.
 ///
 /// The header options are the native header's (iOS, Android); a platform
 /// without one ([`NO_NATIVE_HEADER`]) reads only `header_view`,
 /// `header_height`, `prevent_back`, `gesture_enabled` and `animation`.
+/// `interactive_pop_enabled` controls only UIKit's recognizers, including
+/// Mac Catalyst; true preserves their state until a false-to-true restore.
 #[derive(Debug, Clone, PartialEq)]
 pub struct ScreenConfig {
     /// Title in the header.
@@ -405,6 +407,10 @@ pub struct ScreenConfig {
     /// following the finger) is on; the back button pops either way
     /// (`popOnSwipe`).
     pub gesture_enabled: bool,
+    /// iOS and Mac Catalyst: false pauses the top page's edge and content
+    /// pop recognizers; true restores their prior UIKit state
+    /// (`ios.interactivePopEnabled`). Ignored by other platforms.
+    pub interactive_pop_enabled: bool,
     /// The user cannot leave the screen (`popOnBack` false: no swipe, the
     /// back buttons do not pop): answered by the platform when the system
     /// asks, without JS. Every back press sends
@@ -453,6 +459,7 @@ impl Default for ScreenConfig {
             back_title: None,
             back_visible: true,
             gesture_enabled: true,
+            interactive_pop_enabled: true,
             prevent_back: false,
             animation: ScreenAnimation::Default,
             left: None,

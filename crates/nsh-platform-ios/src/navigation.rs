@@ -8,7 +8,8 @@
 //!
 //! UIKit asks some of this synchronously (may the swipe begin, may the back
 //! button pop, may the sheet close): the answers come from props already
-//! mounted (`popOnSwipe`, `popOnBack`, `closeOnSwipe`, `closeOnEscape`),
+//! mounted (`popOnSwipe`, `popOnBack`, `ios.interactivePopEnabled`,
+//! `closeOnSwipe`, `closeOnEscape`),
 //! never from JS.
 
 use std::{
@@ -44,7 +45,7 @@ use objc2_ui_kit::{
     UIViewControllerTransitionCoordinatorContext,
 };
 
-use crate::{mount::SharedMounter, native_view::NshView};
+use crate::{mount::SharedMounter, native_view::NshView, pop_gesture::PopGestureOverrides};
 
 fn insets_payload(i: EdgeInsets) -> EventPayload {
     EventPayload::Map(vec![
@@ -90,6 +91,9 @@ pub(crate) struct ScreenIvars {
     /// The header height last reported to the core.
     measured: Cell<Option<f32>>,
     insets: Cell<Option<EdgeInsets>>,
+    /// Transition callbacks can run while the mounter is applying a batch.
+    /// Keep the page's permission here so they need no mounter borrow.
+    interactive_pop_enabled: Cell<bool>,
 }
 
 define_class!(
@@ -152,10 +156,23 @@ impl ScreenController {
             measure: Cell::new(false),
             measured: Cell::new(None),
             insets: Cell::new(None),
+            interactive_pop_enabled: Cell::new(true),
         });
         // SAFETY: UIViewController's designated initializer.
         unsafe {
             msg_send![super(this), initWithNibName: Option::<&NSString>::None, bundle: Option::<&NSObject>::None]
+        }
+    }
+
+    /// Apply immediately for the visible page; covered pages keep their own
+    /// setting until UIKit brings them back to the top. During a transition,
+    /// its completion applies the setting without cancelling the drag.
+    pub(crate) fn set_interactive_pop_enabled(&self, enabled: bool) {
+        self.ivars().interactive_pop_enabled.set(enabled);
+        if let Some(nav) = self.navigationController()
+            && nav.transitionCoordinator().is_none()
+        {
+            sync_interactive_pop(&nav);
         }
     }
 
@@ -404,6 +421,38 @@ pub(crate) struct NavIvars {
     mounter: SharedMounter,
     /// The app's own change of screens is being applied.
     applying: Cell<bool>,
+    pop_overrides: RefCell<PopGestureOverrides<Retained<UIGestureRecognizer>>>,
+}
+
+/// Both recognizers belong to the stack, but the permission belongs to its
+/// actual top controller. The delegate still enforces the root check,
+/// popOnSwipe/popOnBack and the transition guard when a recognizer begins.
+fn sync_interactive_pop(nav: &UINavigationController) {
+    let Some(controller) = nav.downcast_ref::<NavController>() else {
+        return;
+    };
+    let allowed = nav.topViewController().is_none_or(|top| {
+        top.downcast_ref::<ScreenController>()
+            .is_none_or(|screen| screen.ivars().interactive_pop_enabled.get())
+    });
+    let sync = |pop: Retained<UIGestureRecognizer>| {
+        let enabled = controller.ivars().pop_overrides.borrow_mut().update(
+            pop.clone(),
+            allowed,
+            pop.isEnabled(),
+        );
+        if let Some(enabled) = enabled {
+            pop.setEnabled(enabled);
+        }
+    };
+    if let Some(pop) = nav.interactivePopGestureRecognizer() {
+        sync(pop);
+    }
+    if nav.respondsToSelector(sel!(interactiveContentPopGestureRecognizer))
+        && let Some(pop) = nav.interactiveContentPopGestureRecognizer()
+    {
+        sync(pop);
+    }
 }
 
 /// A drag that starts at the screen's edge belongs to the stack: the top
@@ -584,6 +633,7 @@ impl NavController {
             stack,
             mounter,
             applying: Cell::new(false),
+            pop_overrides: RefCell::new(PopGestureOverrides::new()),
         });
         // SAFETY: UIViewController's designated initializer.
         unsafe {
@@ -631,6 +681,15 @@ define_class!(
                     )
                 }
                 .expect("the navigation controller lives");
+                let completed_nav = nav.clone();
+                let completed = RcBlock::new(
+                    move |_context: NonNull<
+                        ProtocolObject<dyn UIViewControllerTransitionCoordinatorContext>,
+                    >| {
+                        sync_interactive_pop(&completed_nav);
+                    },
+                );
+                coordinator.animateAlongsideTransition_completion(None, Some(&completed));
                 let block = RcBlock::new(
                     move |_context: NonNull<
                         ProtocolObject<dyn UIViewControllerTransitionCoordinatorContext>,
@@ -677,6 +736,12 @@ define_class!(
             if let Some(pop) = nav.interactivePopGestureRecognizer() {
                 pop.setDelegate(Some(ProtocolObject::from_ref(self)));
             }
+            if nav.respondsToSelector(sel!(interactiveContentPopGestureRecognizer))
+                && let Some(pop) = nav.interactiveContentPopGestureRecognizer()
+            {
+                pop.setDelegate(Some(ProtocolObject::from_ref(self)));
+            }
+            sync_interactive_pop(nav);
         }
     }
 
@@ -944,6 +1009,9 @@ impl StackHost {
                 .zip(current.iter())
                 .all(|(a, b)| std::ptr::eq::<UIViewController>(&**a, &*b));
         if same {
+            if self.nav.transitionCoordinator().is_none() {
+                sync_interactive_pop(&self.nav);
+            }
             return;
         }
         let top_changed = match (current.lastObject(), desired.last()) {
@@ -989,6 +1057,11 @@ impl StackHost {
         // appearance) forces a layout pass.
         size_screens(&self.nav);
         defer_to_back_swipe(&self.nav);
+        // Animated changes apply the flag at completion, after UIKit has
+        // settled the recognizers, without cancelling an active gesture.
+        if self.nav.transitionCoordinator().is_none() {
+            sync_interactive_pop(&self.nav);
+        }
     }
 
     /// Puts the bar where this stack says it goes, if it is the stack on

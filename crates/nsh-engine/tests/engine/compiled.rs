@@ -1156,7 +1156,7 @@ mount(() => (
   <View style={{ flex: 1 }}>
     <NavStack state={nav} style={{ flex: 1 }}>
       {(route) => (
-        <NavPage title={route} headerRight={<Text>right</Text>} header={<View testID="bar" style={{ height: 60 }}><Text>bar</Text></View>}>
+        <NavPage testID="header-page" title={route} headerRight={<Text>right</Text>} header={<View testID="bar" style={{ height: 60 }}><Text>bar</Text></View>}>
           <View testID="content" style={{ height: 10 }} />
         </NavPage>
       )}
@@ -1172,9 +1172,16 @@ fn frame_of(batch: &MountBatch, id: u32) -> Option<nsh_core::Bounds<Points>> {
     })
 }
 
-fn screen_config_of(batch: &MountBatch) -> Option<(u32, nsh_core::ScreenConfig)> {
+fn test_id(batch: &MountBatch, wanted: &str) -> Option<u32> {
+    batch.items.iter().find_map(|i| match i {
+        MountItem::ViewProps { id, props } if props.test_id.as_deref() == Some(wanted) => Some(*id),
+        _ => None,
+    })
+}
+
+fn screen_config_of(batch: &MountBatch, screen: u32) -> Option<nsh_core::ScreenConfig> {
     batch.items.iter().rev().find_map(|i| match i {
-        MountItem::ScreenConfig { id, config } => Some((*id, (**config).clone())),
+        MountItem::ScreenConfig { id, config } if *id == screen => Some((**config).clone()),
         _ => None,
     })
 }
@@ -1188,7 +1195,8 @@ fn pages_place_their_header_without_a_native_one() {
     let first = rx
         .recv_timeout(Duration::from_secs(5))
         .expect("first frame");
-    let (screen, config) = screen_config_of(&first).expect("a page");
+    let screen = test_id(&first, "header-page").expect("the page");
+    let config = screen_config_of(&first, screen).expect("a page");
     let header = config.header_view.expect("its header");
     let frame = frame_of(&first, header).expect("the header's frame");
     assert_eq!(
@@ -1212,7 +1220,8 @@ fn pages_place_their_header_without_a_native_one() {
     let first = rx
         .recv_timeout(Duration::from_secs(5))
         .expect("first frame");
-    let (_, config) = screen_config_of(&first).expect("a page");
+    let screen = test_id(&first, "header-page").expect("the page");
+    let config = screen_config_of(&first, screen).expect("a page");
     assert_eq!(config.header_height, px(44.0));
 }
 
@@ -1357,5 +1366,61 @@ fn set_routes_keeps_pages_that_stay_and_parts_take_test_ids() {
         "backdrop",
     ] {
         assert!(ids.iter().any(|i| i == wanted), "{wanted} in {ids:?}");
+    }
+}
+
+/// A page can pause iOS pop gestures without changing Android predictive
+/// back or button policy. The mounted config must follow each signal write.
+#[test]
+fn interactive_pop_enabled_reaches_native_config_reactively() {
+    let (engine, rx) = start_app(
+        r#"
+import { mount, signal, Text } from "nsh";
+import { NavPage, NavStack, createNavStack } from "nsh/base";
+const enabled = signal(false);
+const nav = createNavStack(["default", "controlled"]);
+mount(() => <NavStack state={nav}>{route => route === "default"
+    ? <NavPage testID="default" title="Page"><Text>Default</Text></NavPage>
+    : <NavPage testID="controlled" title="Page" ios={{ interactivePopEnabled: enabled() }}>
+        <Text onPress={() => enabled.set(!enabled())}>Toggle</Text>
+      </NavPage>
+}</NavStack>);
+"#,
+    );
+    let first = rx
+        .recv_timeout(Duration::from_secs(5))
+        .expect("first frame");
+    let page = test_id(&first, "controlled").expect("controlled page");
+    let default_page = test_id(&first, "default").expect("default page");
+    let disabled = screen_config_of(&first, page).expect("controlled config");
+    let default = screen_config_of(&first, default_page).expect("default config");
+    assert_ne!(
+        default, disabled,
+        "ios.interactivePopEnabled=false must change the native page config"
+    );
+    assert!(
+        disabled.gesture_enabled,
+        "Android predictive back stays enabled"
+    );
+    assert!(!disabled.prevent_back, "back buttons still pop");
+    let toggle = text_id(&first, "Toggle").unwrap();
+    for expected in [&default, &disabled, &default] {
+        engine
+            .control()
+            .dispatch_event(toggle, EventKind::Press, EventPayload::None);
+        let batch = next(&rx, |b| {
+            b.items
+                .iter()
+                .any(|i| matches!(i, MountItem::ScreenConfig { id, .. } if *id == page))
+        });
+        let config = screen_config_of(&batch, page).unwrap();
+        assert_eq!(&config, expected);
+        assert!(
+            !batch
+                .items
+                .iter()
+                .any(|i| matches!(i, MountItem::Create { .. } | MountItem::Remove { .. })),
+            "toggling does not remount the page"
+        );
     }
 }
