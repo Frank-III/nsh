@@ -130,6 +130,7 @@ mod tests {
             ("HostProps", "  onLayout?: (e: { bounds: Bounds }) => void;"),
             ("AndroidHostProps", "  elevation?: number;"),
             ("IOSHostProps", "  backdropMaterial?: BackdropMaterial;"),
+            ("IOSHostProps", "  accessibilityViewIsModal?: boolean;"),
             ("InputHostProps", "  keyboardType?: KeyboardType;"),
             (
                 "InputHostProps",

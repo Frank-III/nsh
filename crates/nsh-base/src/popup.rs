@@ -673,7 +673,9 @@ pub(crate) fn dropdown(
             let backdrop = overlay()
                 .inset_0()
                 .bind_opacity(&motion.fade)
+                // No element for screen readers, as a menu sheet's.
                 .focusable(false)
+                .accessibility_elements_hidden(true)
                 .app_class(frame.backdrop_class)
                 .inline_style(frame.backdrop_style)
                 .on_press(move || dismiss(OpenChangeReason::BackdropPress));
@@ -681,6 +683,7 @@ pub(crate) fn dropdown(
                 .left_0()
                 .right_0()
                 .bottom_0()
+                .accessibility_view_is_modal(true)
                 // Below the status bar, whatever the rows.
                 .max_h(move || Length::from(window().height - safe_area().top))
                 .app_class(frame.popup_class)

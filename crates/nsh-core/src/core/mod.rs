@@ -3987,6 +3987,7 @@ impl<M: TextEngine> Core<M> {
                         a.hidden = hidden;
                     }
                     AccessibilityProp::LiveRegion(v) => a.live_region = v,
+                    AccessibilityProp::ViewIsModal(v) => a.view_is_modal = v,
                     AccessibilityProp::Actions(v) => a.actions = v,
                     AccessibilityProp::Level(v) => a.level = v,
                 }

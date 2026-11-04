@@ -1291,6 +1291,20 @@ pub trait Accessible: Element {
         self
     }
 
+    /// VoiceOver reads only it and what is inside it while `modal` holds,
+    /// not the views beside it (TS: `ios={{ accessibilityViewIsModal }}`):
+    /// a sheet or menu over the page, whose backdrop and page stay out of
+    /// reach until it closes. Only iOS has it.
+    fn accessibility_view_is_modal(mut self, modal: impl IntoReactive<bool>) -> Self {
+        self.node().bind_attr(modal, |a, modal| {
+            super::host::set_in(
+                &mut a.props,
+                Prop::Accessibility(AccessibilityProp::ViewIsModal(modal)),
+            )
+        });
+        self
+    }
+
     /// The actions assistive technologies offer on it (TS:
     /// `accessibilityActions`): `increment` and `decrement` for an
     /// adjustable element, `activate`, `longpress`, or the app's own with

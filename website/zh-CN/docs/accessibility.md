@@ -14,6 +14,7 @@ NSH 用原生视图渲染，所以平台的辅助技术（iOS 和 Mac Catalyst �
 - **文本会被朗读。** 文本元素是一个无障碍元素，标签就是它的文字。没有标签的视图会朗读其内部的文字。
 - **可按压视图是元素。** 带按压或长按处理函数（`.on_press`、`onPress`）的视图默认是无障碍元素，激活它（在 VoiceOver 或 TalkBack 下双击）就会按下它。
 - **输入框是文本框**，带有占位文字、值和键盘。
+- **页面上方的面板是模态的。** 在触摸屏上，`Menu`、`Select`、`Sheet` 或紧凑 `Dock` 的面板会对屏幕阅读器隐藏其背景遮罩，并在关闭前让 VoiceOver 停留在面板内。在 iOS 上，面板打开时 VoiceOver 会移到它的第一个元素。逃逸手势（双指来回滑动）或 TalkBack 的返回会关闭它。
 - **文字跟随用户的大小设置。** 见[文字大小](#文字大小)。
 
 ## 标签、提示与角色
@@ -56,6 +57,7 @@ view()
 | `.accessibility_elements_hidden(..)` | `accessibilityElementsHidden` | `boolean` | 对辅助技术隐藏该视图及其子树。 |
 | | `importantForAccessibility` | `"auto" \| "yes" \| "no" \| "no-hide-descendants"` | 视图（及其子树）是否暴露。 |
 | | `android={{ accessibilityLiveRegion }}` | `"none" \| "polite" \| "assertive"` | Android：视图的变化如何播报给 TalkBack。 |
+| `.accessibility_view_is_modal(..)` | `ios={{ accessibilityViewIsModal }}` | `boolean` | iOS：VoiceOver 只朗读该视图及其内部内容，不读它旁边的视图；视图出现在屏幕上时 VoiceOver 会移入其中。用于你自己放在页面上方的面板和浮层。 |
 | `.test_id(..)` | `testID` | `string` | UI 测试用的标识（iOS 上的 accessibility identifier，Android 上的 resource id）；不会被朗读。 |
 
 给每个只有图标的控件加上标签：屏幕阅读器无法朗读一个符号或一张图片。标签保持简短，不要包含角色（写 "Play"，不要写 "Play button"）：角色会单独播报。

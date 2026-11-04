@@ -197,12 +197,15 @@ fn drawer(a: AreaCx, placement: DockPlacement) -> AnyElement {
             let backdrop = overlay()
                 .inset_0()
                 .bind_opacity(&motion.fade)
+                // No element for screen readers, as a menu sheet's.
                 .focusable(false)
+                .accessibility_elements_hidden(true)
                 .app_class(a.props.backdrop_class)
                 .inline_style(a.props.backdrop_style)
                 .on_press(close);
             let panel = overlay()
                 .flex_col()
+                .accessibility_view_is_modal(true)
                 .style_with(move |s| match side {
                     Placement::Left => s.top_0().bottom_0().left_0().w(size()),
                     Placement::Right => s.top_0().bottom_0().right_0().w(size()),

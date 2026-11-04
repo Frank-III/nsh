@@ -242,6 +242,9 @@ pub struct Accessibility {
     pub hidden: bool,
     /// `accessibilityLiveRegion`.
     pub live_region: LiveRegion,
+    /// `accessibilityViewIsModal` (iOS): VoiceOver reads only the view and
+    /// what is inside it, not the views beside it.
+    pub view_is_modal: bool,
     /// `accessibilityActions`.
     pub actions: Vec<AccessibilityActionDef>,
     /// `accessibilityLevel`: the level of a heading (1 the top), the depth
@@ -290,6 +293,10 @@ pub enum AccessibilityProp {
     /// to TalkBack.
     #[prop(android = "accessibilityLiveRegion")]
     LiveRegion(LiveRegion),
+    /// `accessibilityViewIsModal` (iOS): VoiceOver reads only the view and
+    /// what is inside it, not the views beside it (a sheet over the page).
+    #[prop(ios = "accessibilityViewIsModal")]
+    ViewIsModal(bool),
     /// `accessibilityActions`: custom actions offered to assistive technologies
     /// (`onAccessibilityAction` reports them).
     #[prop(js = "accessibilityActions")]

@@ -122,7 +122,9 @@ pub fn Sheet(props: SheetProps, cx: Scope<SheetEvent>) -> impl IntoElement {
         let backdrop = overlay()
             .inset_0()
             .bind_opacity(&dragged_fade)
+            // No element for screen readers, as a menu sheet's.
             .focusable(false)
+            .accessibility_elements_hidden(true)
             .app_class(props.backdrop_class)
             .inline_style(props.backdrop_style)
             .on_press(move || {
@@ -140,6 +142,7 @@ pub fn Sheet(props: SheetProps, cx: Scope<SheetEvent>) -> impl IntoElement {
             })
             .app_class(props.popup_class)
             .inline_style(props.popup_style)
+            .accessibility_view_is_modal(true)
             .bind_translate_x(&motion.x)
             .on_layout(move |frame: &Bounds<Points>| {
                 panel_height.replace(frame.size.height.max(Points(1.0)));

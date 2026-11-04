@@ -193,7 +193,11 @@ fn surface(
                 let backdrop = overlay()
                     .inset_0()
                     .bind_opacity(&motion.fade)
+                    // No element for screen readers: VoiceOver's escape
+                    // gesture and TalkBack's back close the menu
+                    // (`on_cancel`), and the panel is modal.
                     .focusable(false)
+                    .accessibility_elements_hidden(true)
                     .app_class(parts.backdrop_class)
                     .inline_style(parts.backdrop_style)
                     .on_press(move || dismiss(OpenChangeReason::BackdropPress));
@@ -202,6 +206,7 @@ fn surface(
                     .right_0()
                     .bottom_0()
                     .role(AccessibilityRole::Menu)
+                    .accessibility_view_is_modal(true)
                     .app_class(parts.popup_class)
                     .inline_style(parts.popup_style)
                     .bind_translate_y(&motion.y)
