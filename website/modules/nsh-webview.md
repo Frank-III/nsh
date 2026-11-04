@@ -69,7 +69,7 @@ mount(Browser);
 |---|---|---|
 | `onLoadStart` | `WebViewNavigation` | A page starts loading. |
 | `onLoad` | `WebViewNavigation` | A page finished loading. |
-| `onError` | `{ message: string }` | A page failed to load. |
+| `onError` | `{ message: string }` | A page failed to load, or (Android) the page's renderer process died; the view is then empty and the app remounts it to recover. |
 | `onNavigationStateChange` | `WebViewNavigation` | The URL, title, loading state or history changed. |
 | `onMessage` | `{ data: string }` | The page called `window.nsh.postMessage(data)`. |
 
