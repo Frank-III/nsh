@@ -21,10 +21,10 @@ use objc2_foundation::{
     NSArray, NSAttributedString, NSAttributedStringKey, NSDictionary, NSObject, NSRange, NSString,
 };
 use objc2_ui_kit::{
-    NSFontAttributeName, NSForegroundColorAttributeName, NSTextAlignment, UIColor, UIControl,
-    UIControlEvents, UIEdgeInsets, UIKeyboardAppearance, UIKeyboardType, UILabel, UIResponder,
-    UIReturnKeyType, UITextAutocapitalizationType, UITextAutocorrectionType, UITextField,
-    UITextView, UIView, UIViewAutoresizing,
+    NSFontAttributeName, NSForegroundColorAttributeName, NSObjectUIAccessibility, NSTextAlignment,
+    UIColor, UIControl, UIControlEvents, UIEdgeInsets, UIKeyboardAppearance, UIKeyboardType,
+    UILabel, UIResponder, UIReturnKeyType, UITextAutocapitalizationType, UITextAutocorrectionType,
+    UITextField, UITextView, UIView, UIViewAutoresizing,
 };
 
 use crate::{target::EventTarget, text};
@@ -703,6 +703,7 @@ pub(crate) struct Input {
     /// commit what it composes, so it waits for the composition to end.
     pending: Option<(String, u32)>,
     config: Option<InputConfig>,
+    accessibility_label: Option<Retained<NSString>>,
     content: Bounds<Points>,
     /// The app listens to pastes (`onPaste`).
     paste_listens: bool,
@@ -712,6 +713,7 @@ impl Input {
     pub(crate) fn new(mtm: MainThreadMarker, id: NodeId, target: &EventTarget) -> Self {
         let container = UIView::new(mtm);
         container.setTag(id as isize);
+        container.setIsAccessibilityElement(false, mtm);
         let editor = Editor::Line(Field::new(mtm));
         let input = Self {
             container,
@@ -722,6 +724,7 @@ impl Input {
             composition: None,
             pending: None,
             config: None,
+            accessibility_label: None,
             content: Bounds::default(),
             paste_listens: false,
         };
@@ -741,6 +744,12 @@ impl Input {
         }
     }
 
+    pub(crate) fn set_accessibility_label(&mut self, label: Option<&str>) {
+        self.accessibility_label = label.map(NSString::from_str);
+        self.editor_view()
+            .setAccessibilityLabel(self.accessibility_label.as_deref(), self.container.mtm());
+    }
+
     pub(crate) fn text(&self) -> String {
         match &self.editor {
             Editor::Line(f) => f.text().map(|t| t.to_string()).unwrap_or_default(),
@@ -751,6 +760,8 @@ impl Input {
     fn attach(&self, target: &EventTarget) {
         let view = self.editor_view();
         view.setTag(self.id as isize);
+        // Attaching a replacement editor restores the current accessible name.
+        view.setAccessibilityLabel(self.accessibility_label.as_deref(), self.container.mtm());
         view.setFrame(self.container.bounds());
         view.setAutoresizingMask(
             UIViewAutoresizing::FlexibleWidth | UIViewAutoresizing::FlexibleHeight,
