@@ -36,7 +36,7 @@ nsh run                        # 在 Linux 上默认就是 --target linux
 runner 并重启应用。`cargo run` 从 crate 的 `src/main.rs`（由 `nsh init --template rust` 生成）启动同一个根组件：用
 `AppSource::Rust` 调用 [`run_app`](#嵌入-gtk-应用)。
 
-TSX 应用需写明入口，默认在 390×844 的窗口中打开，和其他目标一样支持热重载、在终端显示日志并提供错误浮层：
+TSX 应用需写明入口，默认在 1200×800 的窗口中打开，和其他目标一样支持热重载、在终端显示日志并提供错误浮层：
 
 ```sh
 nsh run App.tsx
