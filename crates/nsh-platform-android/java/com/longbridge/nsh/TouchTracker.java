@@ -263,6 +263,25 @@ final class TouchTracker {
         if (!active) return -1;
         gateState = 1;
         mounter.gateBlock(gate);
+        // The presses under the finger end, pressed styles and ripples
+        // included: lifting the finger ends the pan, it doesn't tap the row
+        // it dragged. Only the gate finger's views: another finger's press
+        // goes on. The walk starts at the finger's node view, so a child
+        // that took the touch through its hit slop (`Box.slopTarget`), which
+        // is not on that chain, keeps its press.
+        cancelFeedback();
+        for (Tracked t : tracked) {
+            if (t.pointer != gatePointer) continue;
+            for (View v = t.view; v != null; ) {
+                Pressable press = v instanceof TextBox ? ((TextBox) v).press
+                        : v instanceof ImageBox ? ((ImageBox) v).press : null;
+                if (v instanceof Box) ((Box) v).cancelPress();
+                else if (press != null) press.cancel();
+                if (v == root) break;
+                ViewParent p = v.getParent();
+                v = p instanceof View ? (View) p : null;
+            }
+        }
         return gateId;
     }
 
