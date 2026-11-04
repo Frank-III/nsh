@@ -694,3 +694,16 @@ test("a plain Shader uploads the whole built-ins block, progress and overflow at
   // time, scale, progress, overflow and padding.
   assert.deepEqual(uploads, [["uniform", [100, 50, 1.5, 2, 0, 0, 0, 0]]]);
 });
+
+test("overlay touch paths follow declaring ancestors without changing DOM ancestry", () => {
+  const player = Object.create(Player.prototype);
+  const root = { _id: 1, _events: new Set(["onTouch"]), parentNode: null };
+  const parent = { _id: 2, _events: new Set(["onTouch"]), parentNode: root };
+  const outer = { _id: 3, _events: new Set(["onTouch"]), parentNode: root, _props: { touchParent: 2 } };
+  const inner = { _id: 4, _events: new Set(["onTouch"]), parentNode: root, _props: { touchParent: 3 } };
+  Object.assign(player, { root, views: new Map([root, parent, outer, inner].map(v => [v._id, v])) });
+  assert.deepEqual(player.touchPath(inner), [4, 3, 2, 1]);
+  assert.deepEqual(player.ancestors(inner), [inner, root]);
+  inner._props = {};
+  assert.deepEqual(player.touchPath(inner), [4, 1]);
+});
