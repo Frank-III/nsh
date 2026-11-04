@@ -21,8 +21,8 @@ use axum::{
 use tokio::sync::broadcast;
 
 use crate::protocol::{
-    BundleFormat, ClientMessage, FetchReply, HostPlatform, LogLevel, PROTOCOL_VERSION,
-    ServerMessage, StepOutcome, TestNetwork, TestStep, WS_PATH,
+    BundleFormat, ClientMessage, FetchReply, HostPlatform, LogLevel, MAX_MESSAGE_SIZE,
+    PROTOCOL_VERSION, ServerMessage, StepOutcome, TestNetwork, TestStep, WS_PATH,
 };
 
 /// What a dev host did, for the server's owner to show ([`DevServer::start`]).
@@ -541,8 +541,8 @@ pub(crate) fn content_type(path: &std::path::Path) -> &'static str {
 }
 
 async fn upgrade(ws: WebSocketUpgrade, State(shared): State<Arc<Shared>>) -> Response {
-    // Bundles are ~100 KB of bytecode; allow generous frames.
-    ws.max_message_size(64 << 20)
+    ws.max_message_size(MAX_MESSAGE_SIZE)
+        .max_frame_size(MAX_MESSAGE_SIZE)
         .on_upgrade(move |socket| async move {
             if let Err(err) = serve_client(socket, shared).await {
                 log::debug!("dev client disconnected: {err}");
