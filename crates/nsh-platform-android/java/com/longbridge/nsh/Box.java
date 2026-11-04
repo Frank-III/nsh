@@ -77,6 +77,18 @@ class Box extends ViewGroup implements Node {
         return content != null ? content : this;
     }
 
+    /**
+     * Moves child {@code v} below {@code before} (null: to the top) without
+     * taking it out of the window, for a restack ({@code zIndex}): removing
+     * it would clear the focus of a field inside.
+     */
+    void restack(View v, View before) {
+        detachViewFromParent(v);
+        int index = before != null ? indexOfChild(before) : -1;
+        attachViewToParent(v, index < 0 ? getChildCount() : index, v.getLayoutParams());
+        invalidate();
+    }
+
     /** Frame of a child, in px, relative to its parent. Margin layout params,
      * so frame layouts (screens, modals) can host core-placed views. */
     static final class Frame extends ViewGroup.MarginLayoutParams {
