@@ -185,5 +185,6 @@ empty view; a top-level navigation to another host (a link the user taps) is can
 
 - iOS loads WebKit the first time a web view is created, so it costs an app something only once it shows one.
 - On macOS `onDownload` saves downloads with WebKit's `WKDownload`.
+- A page without a background of its own shows the element's `backgroundColor`; set one (white, for instance) for pages that expect a white canvas. Without an opaque `backgroundColor` the canvas is white outside iOS and macOS, where the view stays transparent; on Android it is always white.
 - On Android the page's `postMessage` calls arrive on a background thread and are forwarded to the app in order.
 - To round the corners of a web view, give it a corner radius and `overflow: "hidden"` (`.overflow_hidden()`).
