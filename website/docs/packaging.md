@@ -151,6 +151,12 @@ yourself, for example `--abi arm64-v8a` for 64-bit phones only, the smallest APK
 nsh package --target android --abi arm64-v8a
 ```
 
+Apps that reach plain `http://` URLs, for example servers on the local network, opt in with
+`"android": { "cleartextTraffic": true }` in `nsh.json` ([Project structure](./project-structure.md#nshjson)):
+release builds then set `android:usesCleartextTraffic`, Android's application-wide cleartext policy, web views
+included. The app's `capabilities.network` still names the hosts it reaches. Development builds always allow
+plain HTTP, for the dev server.
+
 ### Signing for release
 
 Without `--keystore`, the APK is signed with the standard debug key (`~/.android/debug.keystore`, created if missing),
