@@ -121,6 +121,20 @@ define_class!(
             self.ivars().props.borrow().accessibility.hidden
         }
 
+        #[unsafe(method(accessibilityViewIsModal))]
+        fn accessibility_view_is_modal(&self) -> bool {
+            self.ivars().props.borrow().accessibility.view_is_modal
+        }
+
+        #[unsafe(method(didMoveToWindow))]
+        fn did_move_to_window(&self) {
+            // SAFETY: calling the superclass implementation.
+            let _: () = unsafe { msg_send![super(self), didMoveToWindow] };
+            if self.window().is_some() && self.ivars().props.borrow().accessibility.view_is_modal {
+                crate::system::screen_changed();
+            }
+        }
+
         #[unsafe(method_id(accessibilityIdentifier))]
         fn accessibility_identifier(&self) -> Option<Retained<NSString>> {
             self.ivars().props.borrow().test_id.as_deref().map(NSString::from_str)
@@ -355,7 +369,15 @@ impl NshView {
     /// Sets the touch, accessibility and test properties.
     pub(crate) fn set_props(&self, props: ViewProps, control: &EngineControl) {
         let late = self.late_step_value(&props);
+        // A view that becomes modal on screen takes VoiceOver into it, as
+        // one shown modal does when it moves to the window.
+        let modal = props.accessibility.view_is_modal
+            && !self.ivars().props.borrow().accessibility.view_is_modal
+            && self.window().is_some();
         *self.ivars().props.borrow_mut() = props;
+        if modal {
+            crate::system::screen_changed();
+        }
         *self.ivars().control.borrow_mut() = Some(control.clone());
         if let Some(value) = late {
             crate::system::announce(&value);

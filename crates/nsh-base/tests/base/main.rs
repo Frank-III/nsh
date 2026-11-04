@@ -35,6 +35,7 @@ mod rich_editor;
 mod scrollbar;
 mod select;
 mod sheet;
+mod sheet_a11y;
 mod slider;
 mod switch;
 mod tabs;

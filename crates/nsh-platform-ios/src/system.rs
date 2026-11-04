@@ -580,6 +580,20 @@ pub(crate) fn announce(text: &str) {
     };
 }
 
+/// A modal view came on screen (`accessibilityViewIsModal`): VoiceOver
+/// moves to its first element, as it does for a presented controller,
+/// instead of staying on what opened it.
+pub(crate) fn screen_changed() {
+    // SAFETY: a screen change takes an optional element; none is the
+    // first one.
+    unsafe {
+        objc2_ui_kit::UIAccessibilityPostNotification(
+            objc2_ui_kit::UIAccessibilityScreenChangedNotification,
+            None,
+        )
+    };
+}
+
 /// `setAccessibilityFocus`: VoiceOver moves to `view`.
 pub(crate) fn accessibility_focus(view: &UIView) {
     // SAFETY: layout changes take the element to focus.

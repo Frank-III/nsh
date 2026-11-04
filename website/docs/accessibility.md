@@ -14,6 +14,7 @@ NSH renders with native views, so the platforms' assistive technologies (VoiceOv
 - **Text is read.** A text element is an accessibility element whose label is its text. A view without a label is read as the texts inside it.
 - **Pressable views are elements.** A view with a press or long press handler (`.on_press`, `onPress`) is an accessibility element by default, and activating it (double tap with VoiceOver or TalkBack) presses it.
 - **Inputs are text fields**, with their placeholder, value and keyboard.
+- **Sheets over the page are modal.** On touch screens, a `Menu`, `Select`, `Sheet` or compact `Dock` sheet hides its backdrop from screen readers and keeps VoiceOver inside its panel until it closes. On iOS, VoiceOver moves to its first element when it opens. The escape gesture (a two-finger scrub) or TalkBack's back closes it.
 - **Text follows the user's size setting.** See [Text size](#text-size).
 
 ## Labels, hints and roles
@@ -56,6 +57,7 @@ view()
 | `.accessibility_elements_hidden(..)` | `accessibilityElementsHidden` | `boolean` | Hides the view and its subtree from assistive technologies. |
 | | `importantForAccessibility` | `"auto" \| "yes" \| "no" \| "no-hide-descendants"` | Whether the view (and its subtree) is exposed. |
 | | `android={{ accessibilityLiveRegion }}` | `"none" \| "polite" \| "assertive"` | Android: how changes of the view are announced to TalkBack. |
+| `.accessibility_view_is_modal(..)` | `ios={{ accessibilityViewIsModal }}` | `boolean` | iOS: VoiceOver reads only the view and what is inside it, not the views beside it, and moves into it when it comes on screen. For your own sheets and overlays over the page. |
 | `.test_id(..)` | `testID` | `string` | An identifier for UI tests (the accessibility identifier on iOS, the resource id on Android); not read aloud. |
 
 Give every icon-only control a label: a screen reader cannot read a glyph or an image. Keep labels short and do not include the role ("Play", not "Play button"): the role is announced on its own.
