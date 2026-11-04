@@ -159,11 +159,18 @@ pub fn Popover(props: PopoverProps, cx: Scope<PopoverEvent>) -> impl IntoElement
                 // while it goes). Made with the popup and before it, as
                 // overlays shown together stack in the order they were made:
                 // one made later, in a region of its own, would cover the
-                // popup and take the presses on it.
+                // popup and take the presses on it. While it takes no
+                // presses it is hidden from screen readers: they activate a
+                // pressable view whatever its pointer events. A press that
+                // still reaches it closes the popover only when
+                // `closeOnPressOutside` allows it.
                 let backdrop = (!desktop).then(|| {
                     overlay()
                         .inset_0()
                         .focusable(false)
+                        .accessibility_elements_hidden(move || {
+                            !(open.get() && props.close_on_press_outside.get())
+                        })
                         .pointer_events(move || {
                             if open.get() && props.close_on_press_outside.get() {
                                 PointerEvents::Auto
@@ -171,7 +178,12 @@ pub fn Popover(props: PopoverProps, cx: Scope<PopoverEvent>) -> impl IntoElement
                                 PointerEvents::None
                             }
                         })
-                        .on_press(move || cancel(OpenChangeReason::PressOutside, true))
+                        .on_press(move || {
+                            cancel(
+                                OpenChangeReason::PressOutside,
+                                props.close_on_press_outside.get_untracked(),
+                            )
+                        })
                         .into_element()
                 });
                 let popup = overlay()
