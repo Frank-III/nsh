@@ -24,7 +24,10 @@
 //! (`NSAccessibilityAnnouncementRequestedNotification`);
 //! `AXPress` presses a view that takes presses, as Return does when it
 //! has the keyboard focus (`crate::input::accessibility_press`);
-//! `accessibilityActions` are not exposed.
+//! `AXIncrement` and `AXDecrement` report the `increment` and `decrement`
+//! of `accessibilityActions` (`crate::input::accessibility_step`), and a
+//! new value of such an element tells VoiceOver; other actions are not
+//! exposed.
 //!
 //! Every update is diffed against what was last given to AppKit
 //! ([`Applied`]): `ViewProps` also carries touch properties, and `Text`
@@ -40,8 +43,9 @@ use objc2::{MainThreadOnly, rc::Retained, runtime::AnyObject};
 use objc2_app_kit::{
     NSAccessibility, NSAccessibilityAnnouncementKey,
     NSAccessibilityAnnouncementRequestedNotification, NSAccessibilityLayoutChangedNotification,
-    NSAccessibilityPostNotificationWithUserInfo, NSAccessibilityPriorityKey,
-    NSAccessibilityPriorityLevel, NSAccessibilityUIElementsKey, NSView,
+    NSAccessibilityPostNotification, NSAccessibilityPostNotificationWithUserInfo,
+    NSAccessibilityPriorityKey, NSAccessibilityPriorityLevel, NSAccessibilityUIElementsKey,
+    NSAccessibilityValueChangedNotification, NSView,
 };
 use objc2_foundation::{NSArray, NSDictionary, NSNumber, NSString};
 
@@ -179,6 +183,8 @@ struct Spec {
     hidden: bool,
     /// One element: its children are not exposed.
     grouped: bool,
+    /// `increment` or `decrement` among its actions: steps its value.
+    steps: bool,
 }
 
 /// A batch is about to be applied. (AppKit takes roles at any time, so
@@ -411,6 +417,16 @@ fn apply(view: &NSView, spec: &Spec, was: &AxState) -> AxState {
         view.setAccessibilityValueDescription(
             description.as_deref().map(NSString::from_str).as_deref(),
         );
+        // VoiceOver reads the value a step led to only when told.
+        if spec.steps && was.element {
+            // SAFETY: the element is a view, with an immutable constant.
+            unsafe {
+                NSAccessibilityPostNotification(
+                    view.as_ref(),
+                    NSAccessibilityValueChangedNotification,
+                )
+            };
+        }
     }
     if was.enabled != enabled {
         view.setAccessibilityEnabled(enabled);
@@ -614,7 +630,13 @@ fn spec_for(
         level: a.level,
         hidden: a.hidden || invisible,
         grouped: a.accessible == Some(true) && kind != ViewKind::Text,
+        steps: declares_action(a, "increment") || declares_action(a, "decrement"),
     }
+}
+
+/// Whether `name` is among the element's `accessibilityActions`.
+pub(crate) fn declares_action(a: &Accessibility, name: &str) -> bool {
+    a.actions.iter().any(|x| &*x.name == name)
 }
 
 /// The element a view of `kind` is, with press handlers or not.
@@ -795,6 +817,18 @@ mod tests {
         };
         let s = spec_for(&slider, ViewKind::View, false, None, false);
         assert!(matches!(s.value, Value::Range { now: Some(3.0), .. }));
+        assert!(!s.steps, "no steps without the actions");
+        let stepping = Accessibility {
+            actions: vec![nsh_core::AccessibilityActionDef {
+                name: "decrement".into(),
+                label: None,
+            }],
+            ..slider.clone()
+        };
+        let s = spec_for(&stepping, ViewKind::View, false, None, false);
+        assert!(s.steps);
+        assert!(declares_action(&stepping, "decrement"));
+        assert!(!declares_action(&stepping, "increment"));
         let checkbox = Accessibility {
             role: Role::Checkbox,
             state: AccessibilityState {

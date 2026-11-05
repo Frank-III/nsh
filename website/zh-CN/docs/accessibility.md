@@ -173,7 +173,7 @@ function Quantity() {
 | `magicTap` | 双指双击 | |
 | `escape` | 双指 Z 字形擦除 | |
 
-带有 `increment` 或 `decrement` 的元素，不论角色如何都是可调整的：图表保持 `"image"` 角色，同样能用 VoiceOver 的轻扫和 TalkBack 的滚动逐个切换数据点，每一步之后读出它的 `accessibilityValue`。
+在 macOS 上，`increment` 和 `decrement` 对应 AXIncrement 和 AXDecrement，VoiceOver 和其他辅助客户端用它们移动滑块。带有 `increment` 或 `decrement` 的元素，不论角色如何都是可调整的：图表保持 `"image"` 角色，同样能用 VoiceOver 的轻扫和 TalkBack 的滚动逐个切换数据点，每一步之后读出它的 `accessibilityValue`。
 
 其他名称都成为自定义操作，以 `label`（或名称）列在 VoiceOver 的操作转子和 TalkBack 的操作菜单中。自定义操作是滑动删除之类手势的无障碍替代：
 

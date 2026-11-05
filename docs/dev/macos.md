@@ -260,7 +260,7 @@ rings of box shadows are missing from them, and so are outer box shadows under a
   class is missing.
 - **Inputs**: content types / autofill, keyboard types, autocapitalization, letter spacing; input accessory views are
   never shown (there is no software keyboard); `keyboardShouldPersistTaps` is ignored.
-- **Accessibility**: `accessibilityActions`.
+- **Accessibility**: custom `accessibilityActions` (`increment` and `decrement` are `AXIncrement` and `AXDecrement`).
 - **No desktop equivalent**: the status bar, haptics; the safe area and keyboard height are 0.
 - **Packaged apps** are signed ad hoc; to distribute one, sign it with a Developer ID and notarize it.
 

@@ -921,6 +921,41 @@ pub(crate) fn accessibility_press(surface: &Surface, view: &NshView) -> bool {
     true
 }
 
+/// Whether `AXIncrement` or `AXDecrement` (`name`: `increment` or
+/// `decrement`) steps `view`: it declares the action and hears it, is not
+/// disabled, the pointer could reach it and it is inside the newest modal,
+/// as for [`takes_accessibility_press`]. Other views do not offer it.
+pub(crate) fn takes_accessibility_step(surface: &Surface, view: &NshView, name: &str) -> bool {
+    {
+        let s = view.state();
+        if !s.events.contains(EventKind::AccessibilityAction)
+            || s.props.accessibility.state.disabled
+            || !crate::access::declares_action(&s.props.accessibility, name)
+        {
+            return false;
+        }
+    }
+    view.can_target()
+        && view
+            .ns()
+            .isDescendantOf(&crate::navigation::focus_scope(surface))
+}
+
+/// `AXIncrement` or `AXDecrement` from an accessibility client (VoiceOver,
+/// UI automation): reports the action to a view
+/// [`takes_accessibility_step`] allows. Returns whether it did.
+pub(crate) fn accessibility_step(surface: &Surface, view: &NshView, name: &str) -> bool {
+    if !takes_accessibility_step(surface, view, name) {
+        return false;
+    }
+    surface.event(
+        view.id(),
+        EventKind::AccessibilityAction,
+        EventPayload::Map(vec![("actionName", PayloadValue::Str(name.to_owned()))]),
+    );
+    true
+}
+
 /// Tab / Shift+Tab (or with Control) with the root focused: moves into
 /// AppKit's key view loop (fields and the views [`is_key_stop`] takes), from
 /// the first or last, so focus never gets stuck on the root.

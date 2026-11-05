@@ -709,14 +709,46 @@ define_class!(
             })
         }
 
-        // AppKit offers `AXPress` on every view that implements it: only
-        // on the views it presses.
+        // `AXIncrement` and `AXDecrement`: what accessibility clients move
+        // a slider with.
+        #[unsafe(method(accessibilityPerformIncrement))]
+        fn accessibility_perform_increment(&self) -> bool {
+            self.keyboard_surface().is_some_and(|surface| {
+                crate::input::accessibility_step(&surface, &NshView(self.retain()), "increment")
+            })
+        }
+
+        #[unsafe(method(accessibilityPerformDecrement))]
+        fn accessibility_perform_decrement(&self) -> bool {
+            self.keyboard_surface().is_some_and(|surface| {
+                crate::input::accessibility_step(&surface, &NshView(self.retain()), "decrement")
+            })
+        }
+
+        // AppKit offers `AXPress`, `AXIncrement` and `AXDecrement` on every
+        // view that implements them: only on the views they act on.
         #[unsafe(method(isAccessibilitySelectorAllowed:))]
         fn is_accessibility_selector_allowed(&self, selector: Sel) -> bool {
             if selector == sel!(accessibilityPerformPress) {
                 self.ivars().state.try_borrow().is_ok()
                     && self.keyboard_surface().is_some_and(|surface| {
                         crate::input::takes_accessibility_press(&surface, &NshView(self.retain()))
+                    })
+            } else if selector == sel!(accessibilityPerformIncrement)
+                || selector == sel!(accessibilityPerformDecrement)
+            {
+                let name = if selector == sel!(accessibilityPerformIncrement) {
+                    "increment"
+                } else {
+                    "decrement"
+                };
+                self.ivars().state.try_borrow().is_ok()
+                    && self.keyboard_surface().is_some_and(|surface| {
+                        crate::input::takes_accessibility_step(
+                            &surface,
+                            &NshView(self.retain()),
+                            name,
+                        )
                     })
             } else {
                 // SAFETY: NSView's own answer.
